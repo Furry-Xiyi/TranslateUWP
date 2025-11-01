@@ -1,0 +1,43 @@
+﻿<!-- Pages/FavoritesPage.xaml -->
+<Page
+    x:Class="TranslatorApp.Pages.FavoritesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏右侧：排序菜单（由 MainPage 提供搜索框，这里仅列表） -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" Spacing="8">
+            <ComboBox x:Name="SortCombo" Width="200" SelectionChanged="SortCombo_SelectionChanged">
+                <ComboBoxItem Content="收藏时间 ↑"/>
+                <ComboBoxItem Content="收藏时间 ↓"/>
+                <ComboBoxItem Content="首字母 ↑"/>
+                <ComboBoxItem Content="首字母 ↓"/>
+            </ComboBox>
+        </StackPanel>
+
+        <!-- 视图样式 -->
+        <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Right" Spacing="8">
+            <ToggleButton x:Name="ViewList" Content="列表" IsChecked="True" Checked="ViewList_Checked"/>
+            <ToggleButton x:Name="ViewTiles" Content="磁贴" Checked="ViewTiles_Checked"/>
+            <ToggleButton x:Name="ViewGrid" Content="网格" Checked="ViewGrid_Checked"/>
+        </StackPanel>
+
+        <ListView x:Name="FavList" Grid.Row="2" IsItemClickEnabled="True" ItemClick="FavList_ItemClick">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Subtitle}" Opacity="0.7"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>

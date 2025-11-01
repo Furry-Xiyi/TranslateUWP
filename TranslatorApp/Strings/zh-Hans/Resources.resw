@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+ <data name="AppDisplayName" xml:space="preserve">
+ <value>翻译器</value>
+ </data>
+ <data name="NavLookup" xml:space="preserve">
+ <value>查词翻译</value>
+ </data>
+ <data name="NavTranslate" xml:space="preserve">
+ <value>互译</value>
+ </data>
+ <data name="NavFavorites" xml:space="preserve">
+ <value>收藏</value>
+ </data>
+ <data name="GlobalSearchBox" xml:space="preserve">
+ <value>输入词汇…</value>
+ </data>
+ <data name="ValidationSavedSuccess" xml:space="preserve">
+ <value>验证成功，已保存</value>
+ </data>
+ <data name="ValidationFailed" xml:space="preserve">
+ <value>验证失败，请核对后重试</value>
+ </data>
+ <data name="MaskValidating" xml:space="preserve">
+ <value>正在验证…</value>
+ </data>
+ <data name="MaterialApplied" xml:space="preserve">
+ <value>材质切换已应用</value>
+ </data>
+ <data name="ThanksFeedback" xml:space="preserve">
+ <value>感谢反馈（链接位置已留）</value>
+ </data>
+</root>

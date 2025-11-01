@@ -1,0 +1,14 @@
+﻿<!-- App.xaml -->
+<Application
+    x:Class="TranslatorApp.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <!-- 合并 WinUI资源，使页面中能解析 Microsoft.UI.Xaml 控件（如 muxc:Card） -->
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

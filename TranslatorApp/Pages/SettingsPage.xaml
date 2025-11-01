@@ -1,0 +1,156 @@
+﻿<!-- Pages/SettingsPage.xaml -->
+<Page
+    x:Class="TranslatorApp.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24">
+
+            <!-- 外观与材质组 -->
+            <StackPanel Spacing="12" HorizontalAlignment="Stretch">
+                <TextBlock x:Uid="AppearanceGroup" FontSize="20" FontWeight="SemiBold"/>
+                <!-- 主题 -->
+                <muxc:Expander IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinHeight="70">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE706;" Width="30" FontSize="20" VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <TextBlock x:Uid="ThemeHeader.Title" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock x:Uid="ThemeHeader.Subtitle" FontSize="12" Opacity="0.7"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12" HorizontalAlignment="Left">
+                            <RadioButton x:Name="ThemeSystem" Checked="Theme_Checked">
+                                <TextBlock x:Uid="ThemeSystem"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ThemeLight" Checked="Theme_Checked">
+                                <TextBlock x:Uid="ThemeLight"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ThemeDark" Checked="Theme_Checked">
+                                <TextBlock x:Uid="ThemeDark"/>
+                            </RadioButton>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+
+                <!-- 材质 -->
+                <muxc:Expander IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinHeight="70">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE2B1;" Width="30" FontSize="20" VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <TextBlock x:Uid="MaterialHeader.Title" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock x:Uid="MaterialHeader.Subtitle" FontSize="12" Opacity="0.7"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12" HorizontalAlignment="Left">
+                            <RadioButton x:Name="MaterialAcrylic" Checked="Material_Checked">
+                                <TextBlock x:Uid="MaterialAcrylic"/>
+                            </RadioButton>
+                            <RadioButton x:Name="MaterialMica" Checked="Material_Checked">
+                                <TextBlock x:Uid="MaterialMica"/>
+                            </RadioButton>
+                            <RadioButton x:Name="MaterialMicaAlt" Checked="Material_Checked">
+                                <TextBlock x:Uid="MaterialMicaAlt"/>
+                            </RadioButton>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+            </StackPanel>
+
+            <!-- 翻译提供方组 -->
+            <StackPanel Spacing="12" HorizontalAlignment="Stretch">
+                <TextBlock Text="翻译提供方" FontSize="20" FontWeight="SemiBold"/>
+                <!-- Microsoft/Bing -->
+                <muxc:Expander IsExpanded="False" MinHeight="100">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE1D3;" Width="24" FontSize="20"/>
+                            <TextBlock Text="Microsoft Translator"/>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12">
+                            <TextBox x:Name="MS_Endpoint" Header="Endpoint"/>
+                            <TextBox x:Name="MS_Region" Header="Region"/>
+                            <PasswordBox x:Name="MS_Key" Header="Key"/>
+                            <Button Content="保存并验证" Click="SaveAndValidate_MS_Click"/>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+
+                <!-- Baidu -->
+                <muxc:Expander IsExpanded="False" MinHeight="100">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE128;" Width="24" FontSize="20"/>
+                            <TextBlock Text="百度翻译"/>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12">
+                            <TextBox x:Name="BD_AppId" Header="AppId"/>
+                            <PasswordBox x:Name="BD_Key" Header="Key"/>
+                            <Button Content="保存并验证" Click="SaveAndValidate_BD_Click"/>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+
+                <!-- Youdao -->
+                <muxc:Expander IsExpanded="False" MinHeight="100">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE11F;" Width="24" FontSize="20"/>
+                            <TextBlock Text="有道翻译"/>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12">
+                            <TextBox x:Name="YD_AppKey" Header="AppKey"/>
+                            <PasswordBox x:Name="YD_Key" Header="Key"/>
+                            <Button Content="保存并验证" Click="SaveAndValidate_YD_Click"/>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+            </StackPanel>
+
+            <!-- 关于 -->
+            <StackPanel Spacing="12" HorizontalAlignment="Stretch">
+                <TextBlock x:Uid="AboutTitle" FontSize="20" FontWeight="SemiBold"/>
+                <muxc:Expander IsExpanded="False" MinHeight="100">
+                    <muxc:Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Image x:Name="AppLogo" Width="24" Height="24" Stretch="UniformToFill"/>
+                            <StackPanel>
+                                <TextBlock x:Name="AppTitle" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="AppPublisher" FontSize="12" Opacity="0.7"/>
+                                <TextBlock x:Name="AppVersion" FontSize="12" Opacity="0.7"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </muxc:Expander.Header>
+                    <muxc:Expander.Content>
+                        <StackPanel Spacing="8" Padding="12,0,0,12" HorizontalAlignment="Left">
+                            <HyperlinkButton x:Name="JoinQQButton">
+                                <TextBlock x:Uid="JoinQQButton"/>
+                            </HyperlinkButton>
+                            <HyperlinkButton x:Name="JoinDiscordButton">
+                                <TextBlock x:Uid="JoinDiscordButton"/>
+                            </HyperlinkButton>
+                        </StackPanel>
+                    </muxc:Expander.Content>
+                </muxc:Expander>
+            </StackPanel>
+
+            <!-- 底部反馈 -->
+            <HyperlinkButton x:Name="FeedbackButton" Click="SendFeedback_Click" HorizontalAlignment="Left">
+                <TextBlock x:Uid="FeedbackButton"/>
+            </HyperlinkButton>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
