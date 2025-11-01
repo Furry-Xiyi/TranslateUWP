@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+ <data name="AppDisplayName" xml:space="preserve">
+ <value>Translator App</value>
+ </data>
+ <data name="NavLookup" xml:space="preserve">
+ <value>Lookup &amp; Translate</value>
+ </data>
+ <data name="NavTranslate" xml:space="preserve">
+ <value>Translate</value>
+ </data>
+ <data name="NavFavorites" xml:space="preserve">
+ <value>Favorites</value>
+ </data>
+ <data name="GlobalSearchBox" xml:space="preserve">
+ <value>Type a word…</value>
+ </data>
+ <data name="ValidationSavedSuccess" xml:space="preserve">
+ <value>Validation succeeded and saved</value>
+ </data>
+ <data name="ValidationFailed" xml:space="preserve">
+ <value>Validation failed, please check and try again</value>
+ </data>
+ <data name="MaskValidating" xml:space="preserve">
+ <value>Validating…</value>
+ </data>
+ <data name="MaterialApplied" xml:space="preserve">
+ <value>Material applied</value>
+ </data>
+ <data name="ThanksFeedback" xml:space="preserve">
+ <value>Thanks for feedback (link placeholder)</value>
+ </data>
+ <data name="CopiedInput" xml:space="preserve"><value>Input copied</value></data>
+ <data name="CopiedOutput" xml:space="preserve"><value>Output copied</value></data>
+ <data name="ReadStart" xml:space="preserve"><value>Speaking started</value></data>
+ <data name="ReadFailed" xml:space="preserve"><value>Speak failed</value></data>
+ <data name="SpeechInputSuccess" xml:space="preserve"><value>Speech input successful</value></data>
+ <data name="SpeechRecognizeFailed" xml:space="preserve"><value>Speech recognition failed</value></data>
+ <data name="SpeechInputException" xml:space="preserve"><value>Speech input error</value></data>
+ <data name="OcrSuccess" xml:space="preserve"><value>OCR successful</value></data>
+ <data name="OcrFailed" xml:space="preserve"><value>OCR failed</value></data>
+ <data name="FavoriteSaved" xml:space="preserve"><value>Favorited</value></data>
+ <data name="FavoriteRemoved" xml:space="preserve"><value>Unfavorited</value></data>
+ <data name="DailyLoadFailed" xml:space="preserve"><value>Load daily sentence failed</value></data>
+ <data name="DailyTryAgain" xml:space="preserve"><value>Please try again later</value></data>
+ <data name="TranslationComplete" xml:space="preserve"><value>Translation completed</value></data>
+ <data name="TranslationFailedCheck" xml:space="preserve"><value>Translation failed, check settings and network</value></data>
+ <data name="FavoriteTranslationSaved" xml:space="preserve"><value>Saved translation to favorites</value></data>
+
+ <!-- Settings UI labels -->
+ <data name="AppearanceGroup" xml:space="preserve"><value>Appearance &amp; Material</value></data>
+ <data name="ThemeHeader.Title" xml:space="preserve"><value>Theme</value></data>
+ <data name="ThemeHeader.Subtitle" xml:space="preserve"><value>Choose light or dark theme</value></data>
+ <data name="ThemeSystem" xml:space="preserve"><value>Follow system</value></data>
+ <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
+ <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
+ <data name="MaterialHeader.Title" xml:space="preserve"><value>Material</value></data>
+ <data name="MaterialHeader.Subtitle" xml:space="preserve"><value>Choose window material</value></data>
+ <data name="MaterialAcrylic" xml:space="preserve"><value>Acrylic</value></data>
+ <data name="MaterialMica" xml:space="preserve"><value>Mica</value></data>
+ <data name="MaterialMicaAlt" xml:space="preserve"><value>None</value></data>
+ <data name="AboutTitle" xml:space="preserve"><value>About</value></data>
+ <data name="JoinQQButton" xml:space="preserve"><value>Join QQ</value></data>
+ <data name="JoinDiscordButton" xml:space="preserve"><value>Join Discord</value></data>
+ <data name="SaveAndValidate" xml:space="preserve"><value>Save &amp; Validate</value></data>
+ <data name="MicrosoftTranslator" xml:space="preserve"><value>Microsoft Translator</value></data>
+ <data name="BaiduTranslate" xml:space="preserve"><value>Baidu Translate</value></data>
+ <data name="YoudaoTranslate" xml:space="preserve"><value>Youdao Translate</value></data>
+ <data name="EndpointLabel" xml:space="preserve"><value>Endpoint</value></data>
+ <data name="RegionLabel" xml:space="preserve"><value>Region</value></data>
+ <data name="KeyLabel" xml:space="preserve"><value>Key</value></data>
+ <data name="AppTitle" xml:space="preserve"><value>Translator App</value></data>
+ <data name="AppPublisher" xml:space="preserve"><value>Publisher</value></data>
+ <data name="AppVersion" xml:space="preserve"><value>Version</value></data>
+ <data name="FeedbackButton" xml:space="preserve"><value>Send Feedback</value></data>
+</root>

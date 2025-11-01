@@ -1,0 +1,206 @@
+﻿<Page
+    x:Class="TranslatorApp.Pages.WordLookupPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <!-- 按钮与骨架资源 -->
+            <SolidColorBrush x:Key="PlayButtonForeground" Color="White"/>
+            <SolidColorBrush x:Key="PlayButtonBgNormal" Color="{ThemeResource SystemAccentColor}" Opacity="0.18"/>
+            <SolidColorBrush x:Key="PlayButtonBgActive" Color="{ThemeResource SystemAccentColor}" Opacity="0.70"/>
+
+            <!-- 骨架底色（接近微软商店） -->
+            <SolidColorBrush x:Key="SkeletonFillBrush" Color="{ThemeResource SystemAccentColor}" Opacity="0.08"/>
+        </ResourceDictionary>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶部卡片（覆盖两行，位于最上层） -->
+        <Grid Grid.Row="0" Grid.RowSpan="2" Canvas.ZIndex="2" Margin="12" VerticalAlignment="Stretch">
+            <Border x:Name="DailySentenceCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8"
+                    Padding="12"
+                    Visibility="Visible">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+
+                <Grid x:Name="CardGrid">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- Caption -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Date -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- En + TTS -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- Zh -->
+                        <RowDefinition Height="*"/>
+                        <!-- Image -->
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 条状辉光（商店式效果），通过 VisualState 控制 -->
+                    <Rectangle x:Name="GlowBar"
+                               Grid.Row="0"
+                               Height="4"
+                               VerticalAlignment="Top"
+                               Opacity="0"
+                               RadiusX="4"
+                               RadiusY="4"
+                               IsHitTestVisible="False">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#00FFFFFF" Offset="0"/>
+                                <GradientStop Color="#66FFFFFF" Offset="0.5"/>
+                                <GradientStop Color="#00FFFFFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+
+                    <!-- Caption 骨架 + 文本 -->
+                    <Grid Grid.Row="0" Height="20" Margin="0,8,0,0">
+                        <Rectangle x:Name="CaptionShimmer"
+                                   Fill="{StaticResource SkeletonFillBrush}"
+                                   RadiusX="4"
+                                   RadiusY="4"
+                                   Visibility="Collapsed"/>
+                        <TextBlock x:Name="TxtCaption"
+                                   Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   Visibility="Collapsed"/>
+                    </Grid>
+
+                    <!-- Date 骨架 + 文本 -->
+                    <Grid Grid.Row="1" Margin="0,4,0,0" Height="16">
+                        <Rectangle x:Name="DateShimmer"
+                                   Fill="{StaticResource SkeletonFillBrush}"
+                                   RadiusX="4"
+                                   RadiusY="4"
+                                   Width="120"
+                                   HorizontalAlignment="Left"
+                                   Visibility="Collapsed"/>
+                        <TextBlock x:Name="TxtDate"
+                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="Collapsed"/>
+                    </Grid>
+
+                    <!-- 英文骨架 + 喇叭 -->
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Rectangle x:Name="EnShimmer"
+                                   Fill="{StaticResource SkeletonFillBrush}"
+                                   RadiusX="4"
+                                   RadiusY="4"
+                                   Height="32"
+                                   HorizontalAlignment="Stretch"
+                                   Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Spacing="8"
+                                    Visibility="Collapsed"
+                                    x:Name="ControlPanel">
+                            <TextBlock x:Name="TxtEn"
+                                       TextWrapping="WrapWholeWords"
+                                       Style="{ThemeResource BodyTextBlockStyle}"
+                                       FontSize="20"
+                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                            <Button x:Name="BtnPlayTts"
+                                    Width="32" Height="32"
+                                    CornerRadius="8"
+                                    Background="{StaticResource PlayButtonBgNormal}"
+                                    Foreground="{StaticResource PlayButtonForeground}"
+                                    ToolTipService.ToolTip="播放发音">
+                                <SymbolIcon Symbol="Volume"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 中文骨架 + 文本 -->
+                    <Grid Grid.Row="3" Height="16" Margin="0,4,0,0">
+                        <Rectangle x:Name="ZhShimmer"
+                                   Fill="{StaticResource SkeletonFillBrush}"
+                                   RadiusX="4"
+                                   RadiusY="4"
+                                   Visibility="Collapsed"/>
+                        <TextBlock x:Name="TxtZh"
+                                   TextWrapping="WrapWholeWords"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="Collapsed"/>
+                    </Grid>
+
+                    <!-- 图片骨架 + 图片 -->
+                    <Grid Grid.Row="4"
+                          CornerRadius="6"
+                          Margin="0,4,0,4"
+                          MinHeight="528"
+                          Height="528"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <Rectangle x:Name="ImageShimmer"
+                                   Fill="{StaticResource SkeletonFillBrush}"
+                                   RadiusX="6"
+                                   RadiusY="6"
+                                   Visibility="Collapsed"/>
+                        <Image x:Name="ImgPic"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Visibility="Collapsed"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- 状态管理：控制 GlowBar 的显隐 -->
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup>
+                    <VisualState x:Name="Normal"/>
+                    <VisualState x:Name="Loading">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="GlowBar"
+                                             Storyboard.TargetProperty="Opacity"
+                                             To="0.22"
+                                             Duration="0:0:0.25"/>
+                        </Storyboard>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+        </Grid>
+
+        <!-- WebView 区域（在底层） -->
+        <Grid Grid.Row="1" Canvas.ZIndex="0">
+            <Border x:Name="WebMask"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    Visibility="Collapsed"/>
+            <muxc:WebView2 x:Name="Web"
+                           NavigationCompleted="Web_NavigationCompleted"
+                           Visibility="Collapsed"/>
+            <Button x:Name="FabFavorite"
+                    Click="FabFavorite_Click"
+                    Width="56" Height="56"
+                    CornerRadius="8"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="16"
+                    ToolTipService.ToolTip="收藏当前查询词汇"
+                    Visibility="Collapsed">
+                <Button.Background>
+                    <AcrylicBrush TintColor="{ThemeResource SystemAccentColor}"
+                                  TintOpacity="0.4"
+                                  FallbackColor="{ThemeResource SystemAccentColor}"/>
+                </Button.Background>
+                <SymbolIcon Symbol="Favorite" Foreground="White"/>
+            </Button>
+        </Grid>
+    </Grid>
+</Page>
