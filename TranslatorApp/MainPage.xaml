@@ -4,100 +4,156 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:TranslatorApp"
     xmlns:pages="using:TranslatorApp.Pages"
-    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls">
 
     <Grid x:Name="RootGrid">
         <Grid.Resources>
             <DataTemplate x:Key="WelcomeApiExpanderTemplate">
-                <Border Background="Transparent" Padding="8">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="" FontSize="20" Margin="0,0,12,0"/>
-                            <StackPanel>
+                <controls:Expander IsExpanded="False"
+                                   HorizontalAlignment="Stretch"
+                                   HorizontalContentAlignment="Left"
+                                   MinHeight="80">
+                    <controls:Expander.Header>
+                        <Grid HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Glyph="&#xE946;" FontSize="20" Margin="0,0,12,0"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="如何获取 API 密钥" FontSize="16" FontWeight="Bold"/>
                                 <TextBlock Text="点击链接前往相关网站注册" FontSize="12" Foreground="Gray"/>
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
+                    </controls:Expander.Header>
 
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <HyperlinkButton Content="Bing 翻译 API" NavigateUri="https://www.microsoft.com/en-us/translator/business/translator-api/"/>
-                            <HyperlinkButton Content="百度翻译 API" NavigateUri="https://api.fanyi.baidu.com/"/>
-                            <HyperlinkButton Content="有道翻译 API" NavigateUri="https://ai.youdao.com/"/>
-                        </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+                        <HyperlinkButton Content="Bing 翻译 API"
+                                         NavigateUri="https://www.microsoft.com/en-us/translator/business/translator-api/"/>
+                        <HyperlinkButton Content="百度翻译 API"
+                                         NavigateUri="https://api.fanyi.baidu.com/"/>
+                        <HyperlinkButton Content="有道翻译 API"
+                                         NavigateUri="https://ai.youdao.com/"/>
                     </StackPanel>
-                </Border>
+                </controls:Expander>
             </DataTemplate>
         </Grid.Resources>
 
-        <!-- 标题栏区（布局用） -->
-        <Grid x:Name="CustomDragRegion" Height="48" VerticalAlignment="Top" Background="Transparent">
+        <!-- 顶部自定义标题栏 -->
+        <Grid x:Name="CustomDragRegion"
+              Height="48"
+              VerticalAlignment="Top"
+              Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" Spacing="8">
+            <!-- 左侧 -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="12,0,0,0">
                 <Image x:Name="AppIconImage" Width="20" Height="20" Stretch="Uniform"/>
                 <TextBlock Text="翻译" FontSize="16" VerticalAlignment="Center"/>
             </StackPanel>
 
-            <Grid x:Name="TitleBarCenterHost" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+            <!-- 中间：底层 DragRegion + 上层交互宿主 -->
+            <Grid Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                <!-- 底层透明拖拽区（注册为标题栏） -->
+                <Border x:Name="DragRegion"
+                        Background="Transparent"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        IsHitTestVisible="True"/>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="0,0,12,0">
-                <Button x:Name="AccountButton" Width="32" Height="32" Padding="0" Background="Transparent" BorderThickness="0" Loaded="AccountButton_Loaded">
-                    <Button.Flyout>
-                        <MenuFlyout x:Name="AccountMenu" Placement="Bottom">
-                            <MenuFlyoutItem x:Name="LoginMenuItem" Text="登录" Click="LoginMenuItem_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <SymbolIcon Symbol="Contact"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Name="SwitchAccountMenuItem" Text="切换账号" Click="SwitchAccountMenuItem_Click" Visibility="Collapsed">
-                                <MenuFlyoutItem.Icon>
-                                    <SymbolIcon Symbol="Switch"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Name="LogoutMenuItem" Text="注销" Click="LogoutMenuItem_Click" Visibility="Collapsed">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph=""/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                        </MenuFlyout>
-                    </Button.Flyout>
+                <!-- 上层交互控件宿主（Background 必须为 null，不要用 Transparent） -->
+                <Grid x:Name="TitleBarCenterHost"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Background="{x:Null}"/>
+            </Grid>
 
-                    <Grid Width="32" Height="32">
-                        <Image x:Name="AccountImage" Width="32" Height="32" Stretch="UniformToFill" Visibility="Collapsed"/>
-                        <FontIcon x:Name="AccountPlaceholderIcon" Glyph="" FontFamily="Segoe MDL2 Assets" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Grid>
-                </Button>
-            </StackPanel>
+            <!-- 右侧账户头像宿主：放在第三列，右对齐并留 12px 右间距 -->
+            <AppBarButton x:Name="AccountButtonHost"
+              Grid.Column="2"
+              Width="40" Height="40"
+              Background="Transparent"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Center"
+              Margin="0,0,12,0"
+              Click="AccountButtonHost_Click">
+                <AppBarButton.Flyout>
+                    <MenuFlyout x:Name="AccountMenu" Placement="Bottom">
+                        <MenuFlyoutItem x:Name="LoginMenuItem" Text="登录" Click="LoginMenuItem_Click">
+                            <MenuFlyoutItem.Icon>
+                                <SymbolIcon Symbol="Contact"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SwitchAccountMenuItem" Text="切换账号" Click="SwitchAccountMenuItem_Click" Visibility="Collapsed">
+                            <MenuFlyoutItem.Icon>
+                                <SymbolIcon Symbol="Switch"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="LogoutMenuItem" Text="注销" Click="LogoutMenuItem_Click" Visibility="Collapsed">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xF3B1;"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+
+                <AppBarButton.Content>
+                    <controls:PersonPicture x:Name="AccountPicture"
+                                Width="32"
+                                Height="32"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center"/>
+                </AppBarButton.Content>
+            </AppBarButton>
         </Grid>
 
         <!-- 主内容区 -->
         <Grid Margin="0,48,0,0">
-            <muxc:NavigationView x:Name="NavView"
-                                 PaneDisplayMode="Left"
-                                 IsBackButtonVisible="Visible"
-                                 IsSettingsVisible="True"
-                                 BackRequested="NavView_BackRequested"
-                                 SelectionChanged="NavView_SelectionChanged">
-
-                <muxc:NavigationView.MenuItems>
-                    <muxc:NavigationViewItem x:Name="Nav_WordLookup" Content="查词" Icon="Find" Tag="WordLookupPage"/>
-                    <muxc:NavigationViewItem x:Name="Nav_OnlineTranslate" Content="互译" Icon="Globe" Tag="OnlineTranslatePage"/>
-                    <muxc:NavigationViewItem x:Name="Nav_Favorites" Content="收藏" Icon="Favorite" Tag="FavoritesPage"/>
-                </muxc:NavigationView.MenuItems>
-
+            <controls:NavigationView x:Name="NavView"
+                                     PaneDisplayMode="Left"
+                                     IsSettingsVisible="True"
+                                     IsBackButtonVisible="Visible"
+                                     BackRequested="NavView_BackRequested"
+                                     SelectionChanged="NavView_SelectionChanged">
+                <controls:NavigationView.MenuItems>
+                    <controls:NavigationViewItem x:Name="Nav_Online" Content="查词" Icon="Find" Tag="WordLookupPage"/>
+                    <controls:NavigationViewItem x:Name="Nav_Lookup" Content="互译" Icon="Globe" Tag="OnlineTranslatePage"/>
+                    <controls:NavigationViewItem x:Name="Nav_Fav" Content="收藏" Icon="Favorite" Tag="FavoritesPage"/>
+                </controls:NavigationView.MenuItems>
                 <Frame x:Name="ContentFrame"/>
-            </muxc:NavigationView>
+            </controls:NavigationView>
         </Grid>
 
-        <!-- 简易 InfoBar（UWP 没有内置 InfoBar 控件） -->
-        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Top" IsHitTestVisible="False" Canvas.ZIndex="9999" Margin="12,12,12,0">
-            <Border x:Name="TopInfoBar" Background="#DD0078D7" CornerRadius="6" Padding="8" HorizontalAlignment="Center" MaxWidth="980" Visibility="Collapsed">
-                <TextBlock x:Name="TopInfoBarText" Foreground="White"/>
-            </Border>
+        <!-- 全局 Loading 遮罩 -->
+        <Grid x:Name="LoadingOverlay" Background="#80000000" Visibility="Collapsed">
+            <ProgressRing IsActive="True" Width="60" Height="60"
+                          Foreground="{ThemeResource SystemControlHighlightAccentBrush}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- 悬浮 InfoBar -->
+        <Grid HorizontalAlignment="Stretch"
+              VerticalAlignment="Top"
+              IsHitTestVisible="False"
+              Canvas.ZIndex="9999"
+              Margin="12,12,12,0">
+            <controls:InfoBar x:Name="TopInfoBar"
+                              IsOpen="False"
+                              Severity="Informational"
+                              IsClosable="False"
+                              HorizontalAlignment="Center"
+                              MaxWidth="980"
+                              RenderTransformOrigin="0.5,0">
+                <controls:InfoBar.RenderTransform>
+                    <TranslateTransform Y="-80"/>
+                </controls:InfoBar.RenderTransform>
+                <TextBlock x:Name="TopInfoBarText" TextWrapping="Wrap" MaxWidth="920"/>
+            </controls:InfoBar>
         </Grid>
     </Grid>
 </Page>
