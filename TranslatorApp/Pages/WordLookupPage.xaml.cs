@@ -208,13 +208,10 @@ namespace TranslatorApp.Pages
             if (MainPage.Current == null) return;
             try
             {
-                MainPage.Current.EnsureTitleBarControls();
-                var cbSite = MainPage.Current.LookupSiteComboBox;
+                MainPage.Current.EnsureTitleBarControls(includeSiteComboBox: false);
                 var searchBox = MainPage.Current.LookupSearchBox;
-                if (cbSite != null && searchBox != null)
+                if (searchBox != null)
                 {
-                    cbSite.SelectionChanged -= LookupSite_SelectionChanged;
-                    cbSite.SelectionChanged += LookupSite_SelectionChanged;
                     searchBox.TextChanged -= SearchBox_TextChanged;
                     searchBox.TextChanged += SearchBox_TextChanged;
                     searchBox.QuerySubmitted -= SearchBox_QuerySubmitted;

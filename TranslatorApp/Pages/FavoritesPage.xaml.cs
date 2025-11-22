@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Windows.Foundation;
@@ -18,16 +18,11 @@ namespace TranslatorApp.Pages
 
         public FavoritesPage()
         {
-            // 加载本地缓存并绑定集合
             FavoritesService.Load();
             Favorites = FavoritesService.Items ?? new ObservableCollection<FavoriteItem>();
-
             InitializeComponent();
-
             List.ItemsSource = Favorites;
             ApplySorting();
-
-            // 初始化指示条位置
             Loaded += (_, __) =>
             {
                 FrameworkElement target = CurrentViewMode switch
@@ -38,8 +33,6 @@ namespace TranslatorApp.Pages
                 };
                 MoveIndicatorTo(target, animate: false);
             };
-
-            // 窗口尺寸变化时重新定位指示条
             SizeChanged += (_, __) =>
             {
                 FrameworkElement target = CurrentViewMode switch
@@ -78,74 +71,82 @@ namespace TranslatorApp.Pages
 
         private void ApplyGridView()
         {
-            if (Resources.TryGetValue("GridItemsPanel", out var gridItemsPanel) && gridItemsPanel is ItemsPanelTemplate gip)
-                List.ItemsPanel = gip;
-
-            if (Resources.TryGetValue("GridItemTemplate", out var git) && git is DataTemplate dgt)
-                List.ItemTemplate = dgt;
-
-            if (Resources.TryGetValue("GridListViewItemStyle", out var gstyle) && gstyle is Style gs)
-                List.ItemContainerStyle = gs;
-            else
+            try
+            {
+                List.ItemsSource = null;
+                List.ItemsPanel = null;
+                List.ItemTemplate = null;
                 List.ItemContainerStyle = null;
 
-            if (List.ItemsSource == null)
+                if (Resources["GridItemsPanel"] is ItemsPanelTemplate gip)
+                    List.ItemsPanel = gip;
+                if (Resources["GridItemTemplate"] is DataTemplate dgt)
+                    List.ItemTemplate = dgt;
+                if (Resources["GridListViewItemStyle"] is Style gs)
+                    List.ItemContainerStyle = gs;
+                else
+                    List.ItemContainerStyle = (Style)Application.Current.Resources["DefaultListViewItemStyle"];
+
                 List.ItemsSource = Favorites;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[ApplyGridView] " + ex);
+                List.ItemsSource = Favorites;
+            }
         }
 
-        private Storyboard? _indicatorStoryboard;
+        private Storyboard _indicatorStoryboard;
         private double _indicatorCurrentX = 0;
 
         private void MoveIndicatorTo(FrameworkElement target, bool animate = true)
         {
-            if (target == null || ViewSwitcherRoot == null || Indicator == null || IndicatorTranslate == null)
-                return;
-
-            if (target.ActualWidth == 0 || ViewSwitcherRoot.ActualWidth == 0)
+            try
             {
-                RoutedEventHandler handler = null;
-                handler = (s, e) =>
+                if (target == null || ViewSwitcherRoot == null || Indicator == null || IndicatorTranslate == null)
+                    return;
+                if (target.ActualWidth <= 0 || ViewSwitcherRoot.ActualWidth <= 0 || !target.IsLoaded || !ViewSwitcherRoot.IsLoaded)
                 {
-                    target.Loaded -= handler;
-                    MoveIndicatorTo(target, animate);
+                    RoutedEventHandler handler = null;
+                    handler = (s, e) =>
+                    {
+                        target.Loaded -= handler;
+                        MoveIndicatorTo(target, animate);
+                    };
+                    target.Loaded += handler;
+                    return;
+                }
+                var transform = target.TransformToVisual(ViewSwitcherRoot);
+                var origin = transform.TransformPoint(new Point(0, 0));
+                double centerX = origin.X + target.ActualWidth / 2.0;
+                double toX = Math.Max(0, centerX - Indicator.Width / 2.0);
+                if (!animate)
+                {
+                    IndicatorTranslate.X = toX;
+                    _indicatorCurrentX = toX;
+                    return;
+                }
+                _indicatorStoryboard?.Stop();
+                var ms = 200d;
+                var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+                var animX = new DoubleAnimation
+                {
+                    From = _indicatorCurrentX,
+                    To = toX,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(ms)),
+                    EasingFunction = easing,
+                    EnableDependentAnimation = true
                 };
-                target.Loaded += handler;
-                return;
-            }
-
-            var transform = target.TransformToVisual(ViewSwitcherRoot);
-            var origin = transform.TransformPoint(new Point(0, 0));
-            double centerX = origin.X + target.ActualWidth / 2.0;
-            double toX = Math.Max(0, centerX - Indicator.Width / 2.0);
-
-            if (!animate)
-            {
-                IndicatorTranslate.X = toX;
+                _indicatorStoryboard = new Storyboard();
+                Storyboard.SetTarget(animX, IndicatorTranslate);
+                Storyboard.SetTargetProperty(animX, "X");
+                _indicatorStoryboard.Children.Add(animX);
+                _indicatorStoryboard.Begin();
                 _indicatorCurrentX = toX;
-                return;
             }
-
-            _indicatorStoryboard?.Stop();
-
-            var ms = 200d;
-            var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-            var animX = new DoubleAnimation
+            catch
             {
-                From = _indicatorCurrentX,
-                To = toX,
-                Duration = new Duration(TimeSpan.FromMilliseconds(ms)),
-                EasingFunction = easing,
-                EnableDependentAnimation = true
-            };
-
-            _indicatorStoryboard = new Storyboard();
-            Storyboard.SetTarget(animX, IndicatorTranslate);
-            Storyboard.SetTargetProperty(animX, "X");
-            _indicatorStoryboard.Children.Add(animX);
-            _indicatorStoryboard.Begin();
-
-            _indicatorCurrentX = toX;
+            }
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -192,7 +193,6 @@ namespace TranslatorApp.Pages
                     "DateOldest" => Favorites.OrderBy(f => f.AddedOn).ToList(),
                     _ => Favorites.ToList()
                 };
-
                 Favorites.Clear();
                 foreach (var item in sorted) Favorites.Add(item);
             }
@@ -200,41 +200,60 @@ namespace TranslatorApp.Pages
 
         private void ApplyListView()
         {
-            var listPanelXaml =
-                "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
-                "  <VirtualizingStackPanel Orientation='Vertical' />" +
-                "</ItemsPanelTemplate>";
-            var listItemsPanel = (ItemsPanelTemplate)XamlReader.Load(listPanelXaml);
-            List.ItemsPanel = listItemsPanel;
+            try
+            {
+                // 彻底断开绑定，防止虚拟化容器在切换过程中访问旧集合
+                List.ItemsSource = null;
+                List.ItemsPanel = null;
+                List.ItemTemplate = null;
+                List.ItemContainerStyle = null;
 
-            if (Resources.TryGetValue("ListItemTemplate", out var listItemTemplate) && listItemTemplate is DataTemplate dtemp)
-                List.ItemTemplate = dtemp;
+                // 设置模板
+                if (Resources["ListItemsPanel"] is ItemsPanelTemplate ipt)
+                    List.ItemsPanel = ipt;
+                if (Resources["ListItemTemplate"] is DataTemplate dtemp)
+                    List.ItemTemplate = dtemp;
+                List.ItemContainerStyle = (Style)Application.Current.Resources["DefaultListViewItemStyle"];
+                List.HorizontalContentAlignment = HorizontalAlignment.Stretch;
 
-            List.ItemContainerStyle = null;
-            List.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-
-            if (List.ItemsSource == null)
+                // 恢复数据源
                 List.ItemsSource = Favorites;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[ApplyListView] " + ex);
+                List.ItemsSource = Favorites;
+            }
         }
 
         private void ApplyTileView()
         {
-            if (Resources.TryGetValue("TileItemsPanel", out var tilePanel) && tilePanel is ItemsPanelTemplate tip)
-                List.ItemsPanel = tip;
-
-            if (Resources.TryGetValue("TileItemTemplate", out var tileTemplate) && tileTemplate is DataTemplate ttemp)
-                List.ItemTemplate = ttemp;
-
-            if (Resources.TryGetValue("TileListViewItemStyle", out var tstyle) && tstyle is Style ts)
-                List.ItemContainerStyle = ts;
-            else
+            try
+            {
+                List.ItemsSource = null;
+                List.ItemsPanel = null;
+                List.ItemTemplate = null;
                 List.ItemContainerStyle = null;
 
-            if (List.ItemsSource == null)
+                if (Resources["TileItemsPanel"] is ItemsPanelTemplate tip)
+                    List.ItemsPanel = tip;
+                if (Resources["TileItemTemplate"] is DataTemplate ttemp)
+                    List.ItemTemplate = ttemp;
+                if (Resources["TileListViewItemStyle"] is Style ts)
+                    List.ItemContainerStyle = ts;
+                else
+                    List.ItemContainerStyle = (Style)Application.Current.Resources["DefaultListViewItemStyle"];
+
                 List.ItemsSource = Favorites;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[ApplyTileView] " + ex);
+                List.ItemsSource = Favorites;
+            }
         }
 
-        public void ApplySearchFilter(string? query)
+        public void ApplySearchFilter(string query)
         {
             if (string.IsNullOrWhiteSpace(query))
             {
@@ -242,16 +261,12 @@ namespace TranslatorApp.Pages
             }
             else
             {
-                var filtered = Favorites
-                    .Where(f => !string.IsNullOrEmpty(f.Term) &&
-                                f.Term.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
+                var filtered = Favorites.Where(f => !string.IsNullOrEmpty(f.Term) && f.Term.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
                 List.ItemsSource = new ObservableCollection<FavoriteItem>(filtered);
             }
         }
 
-        public void OnFavoritesSearchTextChanged(string? text) => ApplySearchFilter(text);
-        public void OnFavoritesSearchQuerySubmitted(string? text) => ApplySearchFilter(text);
+        public void OnFavoritesSearchTextChanged(string text) => ApplySearchFilter(text);
+        public void OnFavoritesSearchQuerySubmitted(string text) => ApplySearchFilter(text);
     }
 }

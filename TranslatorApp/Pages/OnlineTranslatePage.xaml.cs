@@ -200,20 +200,38 @@ namespace TranslatorApp.Pages
 
         private async void BtnCopyInput_Click(object sender, RoutedEventArgs e)
         {
-            var dp = new DataPackage();
-            dp.SetText(TbInput.Text ?? string.Empty);
-            Clipboard.SetContent(dp);
-            AppToast("已复制输入文本");
-            await Task.Delay(300);
+            try
+            {
+                var dp = new DataPackage();
+                dp.SetText(TbInput.Text ?? string.Empty);
+                Clipboard.SetContent(dp);
+                if (MainPage.Current != null) MainPage.Current.ShowSuccess("已复制输入文本");
+                else AppToast("已复制输入文本");
+                await Task.Delay(300);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[BtnCopyInput_Click] " + ex);
+                if (MainPage.Current != null) MainPage.Current.ShowError("复制失败");
+            }
         }
 
         private async void BtnCopyOutput_Click(object sender, RoutedEventArgs e)
         {
-            var dp = new DataPackage();
-            dp.SetText(TbOutput.Text ?? string.Empty);
-            Clipboard.SetContent(dp);
-            AppToast("已复制翻译结果");
-            await Task.Delay(300);
+            try
+            {
+                var dp = new DataPackage();
+                dp.SetText(TbOutput.Text ?? string.Empty);
+                Clipboard.SetContent(dp);
+                if (MainPage.Current != null) MainPage.Current.ShowSuccess("已复制翻译结果");
+                else AppToast("已复制翻译结果");
+                await Task.Delay(300);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[BtnCopyOutput_Click] " + ex);
+                if (MainPage.Current != null) MainPage.Current.ShowError("复制失败");
+            }
         }
 
         private async void BtnSpeakOutput_Click(object sender, RoutedEventArgs e)
@@ -233,10 +251,19 @@ namespace TranslatorApp.Pages
 
         private void BtnFavOutput_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(TbOutput.Text))
+            try
             {
-                FavoritesService.Add(TbOutput.Text.Trim());
-                AppToast("已添加到收藏");
+                if (!string.IsNullOrWhiteSpace(TbOutput.Text))
+                {
+                    FavoritesService.Add(TbOutput.Text.Trim());
+                    if (MainPage.Current != null) MainPage.Current.ShowSuccess("已添加到收藏");
+                    else AppToast("已添加到收藏");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[BtnFavOutput_Click] " + ex);
+                if (MainPage.Current != null) MainPage.Current.ShowError("添加收藏失败");
             }
         }
 
@@ -259,17 +286,16 @@ namespace TranslatorApp.Pages
 
             if (!hasKey)
             {
-                var dlg = new ContentDialog
+                if (MainPage.Current != null)
                 {
-                    Title = $"{api} API 未填写",
-                    Content = new TextBlock { Text = "请前往设置页填写 API 密钥。" },
-                    PrimaryButtonText = "去设置",
-                    CloseButtonText = "取消",
-                    DefaultButton = ContentDialogButton.Primary
-                };
-                var r = await dlg.ShowAsync();
-                if (r == ContentDialogResult.Primary)
+                    MainPage.Current.ShowWarning($"{api} API 未填写");
+                    // 仍然给出导航引导：延迟后跳到设置页
+                    await Task.Delay(200);
+                    Frame.Navigate(typeof(SettingsPage));
+                }
+                else
                 {
+                    AppToast($"{api} API 未填写，请前往设置页填写 API 密钥。");
                     await Task.Delay(200);
                     Frame.Navigate(typeof(SettingsPage));
                 }
@@ -308,19 +334,11 @@ namespace TranslatorApp.Pages
             }
             catch (Exception ex)
             {
-                await new ContentDialog
-                {
-                    Title = "翻译失败",
-                    Content = new ScrollViewer
-                    {
-                        Content = new TextBlock
-                        {
-                            Text = ex.Message,
-                            TextWrapping = TextWrapping.Wrap
-                        }
-                    },
-                    CloseButtonText = "确定"
-                }.ShowAsync();
+                System.Diagnostics.Debug.WriteLine("[Translate error] " + ex);
+                if (MainPage.Current != null)
+                    MainPage.Current.ShowError("翻译失败: " + ex.Message);
+                else
+                    AppToast("翻译失败: " + ex.Message);
             }
             finally
             {
@@ -622,18 +640,21 @@ namespace TranslatorApp.Pages
         }
         private void AppToast(string message)
         {
-            // 将提示交由主页面（UWP简易InfoBar）或在此用 Toast/TextBlock
-            // 这里简单使用 ContentDialog 模拟轻提示，或替换为你的 MainPage.ShowToast
-            // 如果你有 MainPage.Current.ShowToast，可改用那种方式：
-            var _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            var _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
-                var tip = new ContentDialog
+                try
                 {
-                    Title = "提示",
-                    Content = new TextBlock { Text = message },
-                    CloseButtonText = "确定"
-                };
-                await tip.ShowAsync();
+                    if (MainPage.Current != null)
+                    {
+                        MainPage.Current.ShowInfo(message);
+                        return;
+                    }
+                    System.Diagnostics.Debug.WriteLine("[AppToast] " + message);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("[AppToast exception] " + ex);
+                }
             });
         }
 
