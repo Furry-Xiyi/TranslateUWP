@@ -27,7 +27,11 @@ namespace TranslatorApp.Pages
         public SettingsPage()
         {
             this.InitializeComponent();
-            LoadSettings();
+            this.Loaded += (s, e) =>
+            {
+                LoadSettings();
+                //InitializeDictionaryList();
+            };
             _isInitializing = false; // 初始化完毕
         }
 
@@ -275,5 +279,120 @@ namespace TranslatorApp.Pages
                 CloseButtonText = "确定"
             }.ShowAsync();
         }
+
+        // 新增：点击“如何获取 API 密钥”的处理
+        private void HowToGetApi_Click(object sender, RoutedEventArgs e)
+        {
+            // 调用 MainPage 的公共方法显示对话框
+            MainPage.Current?.ShowApiHelpDialog(showDoNotRemind: false);
+        }
+
+        public class DictionaryItem
+        {
+            public string Name { get; set; }
+            public string Desc { get; set; }
+            public string Status { get; set; }
+            public string Type { get; set; }
+        }
+
+        /* private void InitializeDictionaryList()
+        {
+            try
+            {
+                if (this.FindName("DictionaryListPanel") is not StackPanel panel) return;
+
+                var dicts = new[] {
+                    ("雅思词典（IELTS）", "6000+ 雅思核心词汇", "IELTS", ""),
+                    ("专业词典", "15000+ 专业领域术语", "Professional", ""),
+                    ("GRE词典", "5000+ GRE高频词汇", "GRE", ""),
+                    ("托福词典（TOEFL）", "4500+ 托福核心词汇", "TOEFL", "")
+                };
+
+                foreach (var (name, desc, type, downloadUrl) in dicts)
+                {
+                    // 整行 Border，横向拉伸
+                    var border = new Border
+                    {
+                        Background = (Brush)Resources["CardBackgroundFillColorDefaultBrush"],
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(12),
+                        Height = 90,
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    };
+
+                    var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                    // 左侧：词典名称、描述、状态
+                    var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+                    stack.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+                    stack.Children.Add(new TextBlock { Text = desc, FontSize = 12, Foreground = new SolidColorBrush(Colors.Gray) });
+                    stack.Children.Add(new TextBlock { Text = "未安装", FontSize = 11, Opacity = 0.7, Tag = $"status_{type}" });
+
+                    grid.Children.Add(stack);
+
+                    // 右侧：下载按钮
+                    var btn = new Button
+                    {
+                        Tag = type,
+                        Padding = new Thickness(12, 8, 12, 8),
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    btn.Click += DictButton_Click;
+                    var btnStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                    btnStack.Children.Add(new SymbolIcon { Symbol = Symbol.Download });
+                    btnStack.Children.Add(new TextBlock { Text = "下载", FontSize = 12 });
+                    btn.Content = btnStack;
+                    Grid.SetColumn(btn, 1);
+                    grid.Children.Add(btn);
+
+                    border.Child = grid;
+                    panel.Children.Add(border);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"InitializeDictionaryList 异常: {ex}");
+            }
+        }
+
+        private async void DictButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string typeStr)
+            {
+                var type = typeStr switch
+                {
+                    "IELTS" => DictionaryDownloadService.DictionaryType.IELTS,
+                    "Professional" => DictionaryDownloadService.DictionaryType.Professional,
+                    "GRE" => DictionaryDownloadService.DictionaryType.GRE,
+                    "TOEFL" => DictionaryDownloadService.DictionaryType.TOEFL,
+                    _ => DictionaryDownloadService.DictionaryType.IELTS
+                };
+                await DownloadDictionaryAsync(type, typeStr);
+            }
+        }
+
+        private async Task DownloadDictionaryAsync(DictionaryDownloadService.DictionaryType type, string typeName)
+        {
+            try
+            {
+                MainPage.Current?.ShowInfo($"正在下载{typeName}词典，可能需要一些时间...");
+                bool success = await DictionaryDownloadService.DownloadDictionaryAsync(type);
+
+                if (success)
+                {
+                    MainPage.Current?.ShowSuccess($"{typeName}词典下载成功！");
+                }
+                else
+                {
+                    MainPage.Current?.ShowError($"{typeName}词典下载失败，请检查网络连接");
+                }
+            }
+            catch (Exception ex)
+            {
+                MainPage.Current?.ShowError($"下载异常: {ex.Message}");
+            }
+        } */
     }
 }

@@ -180,5 +180,68 @@ namespace TranslatorApp.Services
                 System.Diagnostics.Debug.WriteLine($"[FavoritesService] 云加载失败: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// 导出收藏为 JSON 文件到用户选择的位置
+        /// </summary>
+        public static async Task<bool> ExportFavoritesAsync()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = true });
+                var fileName = $"favorites_{DateTime.Now:yyyy-MM-dd_HHmmss}.json";
+
+                // 使用 FileSavePicker 让用户选择保存位置
+                var savePicker = new Windows.Storage.Pickers.FileSavePicker();
+                savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+                savePicker.FileTypeChoices.Add("JSON 文件", new System.Collections.Generic.List<string> { ".json" });
+                savePicker.SuggestedFileName = fileName;
+
+                var file = await savePicker.PickSaveFileAsync();
+                if (file != null)
+                {
+                    await FileIO.WriteTextAsync(file, json);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        /// <summary>
+        /// 从 JSON 文件导入收藏
+        /// </summary>
+        public static async Task<bool> ImportFavoritesAsync()
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                picker.FileTypeFilter.Add(".json");
+                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+
+                var file = await picker.PickSingleFileAsync();
+                if (file != null)
+                {
+                    var json = await FileIO.ReadTextAsync(file);
+                    var imported = JsonSerializer.Deserialize<ObservableCollection<FavoriteItem>>(json);
+
+                    if (imported != null)
+                    {
+                        // 合并导入数据（避免重复）
+                        foreach (var item in imported)
+                        {
+                            if (!_cache.Any(i => i.Term.Equals(item.Term, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                _cache.Add(item);
+                            }
+                        }
+                        Save();
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
     }
 }

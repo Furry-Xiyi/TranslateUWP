@@ -2,16 +2,16 @@
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Core;
 using Windows.Media.Playback;
-using Windows.Storage.Streams;
-using Windows.UI;
+using Windows.Storage.Pickers;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 
@@ -21,408 +21,311 @@ namespace TranslatorApp.Pages
     {
         private string _currentQuery = string.Empty;
         private readonly List<string> _history = new();
-
-        private bool _bingDictReady = false;
-        private string? _pendingBingQuery;
-
-        private static readonly HttpClient _http = CreateHttp();
-
-        private static HttpClient CreateHttp()
-        {
-            var handler = new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All };
-            var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("TranslatorApp/1.0 (+https://github.com/Furry-Xiyi/TranslatorApp)");
-            return client;
-        }
+        private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private string _currentImageUrl = "";
+        private DailySentenceData _currentData;
 
         public WordLookupPage()
         {
             this.InitializeComponent();
             this.NavigationCacheMode = NavigationCacheMode.Required;
-            InitWebViewAsync();
-            this.Loaded += (_, __) => TryBindTitleBarControls();
+            this.Loaded += WordLookupPage_Loaded;
         }
 
-        private async void InitWebViewAsync()
+        private void WordLookupPage_Loaded(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                // UWP WebView 不需要 EnsureCoreWebView2Async；使用内置 WebView 控件
-            }
-            catch { }
+            // 启动骨架屏闪光动画
+            ShimmerStoryboard.Begin();
         }
 
-        private void LoadHistory() => _history.Clear();
-        private void SaveHistory() => Services.SettingsService.LookupHistory = new List<string>(_history);
-
-        public void AddToHistory(string term)
-        {
-            if (string.IsNullOrWhiteSpace(term)) return;
-            if (!_history.Contains(term))
-            {
-                _history.Insert(0, term);
-                if (_history.Count > 50) _history.RemoveAt(_history.Count - 1);
-                SaveHistory();
-            }
-        }
-
-        private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
-        {
-            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
-            var text = sender.Text ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text)) { sender.ItemsSource = null; return; }
-            var suggestions = new List<string>();
-            suggestions.AddRange(_history.FindAll(h => h.StartsWith(text, StringComparison.OrdinalIgnoreCase)));
-            suggestions.AddRange(new[] { text, $"{text} meaning", $"{text} 翻译", $"{text} 用法" });
-            sender.ItemsSource = suggestions;
-        }
-
-        private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
-        {
-            var q = args.QueryText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(q)) return;
-            _currentQuery = q;
-            AddToHistory(q);
-            NavigateToSite(q);
-        }
-
-        public void NavigateToSite(string query)
-        {
-            ToggleDailySkeleton(false);
-            DailySentenceCard.Visibility = Visibility.Collapsed;
-
-            Web.Visibility = Visibility.Visible;
-            WebMask.Visibility = Visibility.Visible;
-            FabFavorite.Visibility = Visibility.Visible;
-
-            if (MainPage.Current != null)
-            {
-                MainPage.Current.IsInLookupMode = true;
-                MainPage.Current.ShowCloseButton();
-            }
-
-            var site = (MainPage.Current?.LookupSiteComboBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-                       ?? Services.SettingsService.LastLookupSite
-                       ?? "Youdao";
-
-            Services.SettingsService.LastLookupSite = site;
-
-            if (site == "Bing")
-            {
-                if (!_bingDictReady)
-                {
-                    _pendingBingQuery = query;
-                    Web.Opacity = 0;
-                    Web.NavigationCompleted += Web_NavigationCompleted;
-                    SafeSetWebSource("https://cn.bing.com/dict/");
-                    return;
-                }
-            }
-
-            string url = site switch
-            {
-                "Google" => $"https://www.google.com/search?q=define%3A{Uri.EscapeDataString(query)}",
-                "Youdao" => $"https://dict.youdao.com/result?word={Uri.EscapeDataString(query)}&lang=en",
-                _ => $"https://dict.youdao.com/result?word={Uri.EscapeDataString(query)}&lang=en"
-            };
-            SafeSetWebSource(url);
-        }
-
-        private void Web_NavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
-        {
-            WebMask.Visibility = Visibility.Collapsed;
-
-            try
-            {
-                var src = sender.Source?.ToString() ?? sender.CoreWebView2?.Source;
-                Uri? uri = null;
-                if (!string.IsNullOrEmpty(src))
-                {
-                    uri = new Uri(src);
-                }
-                else
-                {
-                    uri = Web.Source;
-                }
-
-                if (uri != null)
-                {
-                    var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                    var newTerm = qs["q"] ?? qs["word"] ?? qs["wd"];
-
-                    if (string.IsNullOrWhiteSpace(newTerm))
-                    {
-                        var segments = uri.AbsolutePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                        var idx = Array.IndexOf(segments, "result");
-                        if (idx >= 0 && idx < segments.Length - 1)
-                            newTerm = segments[idx + 1];
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(newTerm))
-                        _currentQuery = Uri.UnescapeDataString(newTerm);
-                }
-            }
-            catch
-            {
-                // 忽略解析错误
-            }
-
-            if (!string.IsNullOrWhiteSpace(_currentQuery))
-                FabFavorite.Visibility = Visibility.Visible;
-
-            MainPage.Current?.ShowCloseButton();
-
-            // 如果这是热身订阅（_pendingBingQuery 场景），退订以避免重复触发
-            try
-            {
-                sender.NavigationCompleted -= Web_NavigationCompleted;
-            }
-            catch { }
-        }
-
-        private void FabFavorite_Click(object sender, RoutedEventArgs e)
-        {
-            if (!string.IsNullOrWhiteSpace(_currentQuery))
-            {
-                Services.FavoritesService.Add(_currentQuery);
-                Services.FavoritesService.Save();
-                MainPage.Current?.ShowInfo("已收藏");
-            }
-        }
-
-        public void ReturnToDailySentence()
-        {
-            TearDownWebView();
-            _currentQuery = string.Empty;
-            DailySentenceCard.Visibility = Visibility.Visible;
-            FabFavorite.Visibility = Visibility.Collapsed;
-            if (MainPage.Current != null)
-            {
-                MainPage.Current.IsInLookupMode = false;
-                if (MainPage.Current.LookupCloseButton != null) MainPage.Current.LookupCloseButton.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private void TryBindTitleBarControls()
-        {
-            if (MainPage.Current == null) return;
-            try
-            {
-                MainPage.Current.EnsureTitleBarControls(includeSiteComboBox: false);
-                var searchBox = MainPage.Current.LookupSearchBox;
-                if (searchBox != null)
-                {
-                    searchBox.TextChanged -= SearchBox_TextChanged;
-                    searchBox.TextChanged += SearchBox_TextChanged;
-                    searchBox.QuerySubmitted -= SearchBox_QuerySubmitted;
-                    searchBox.QuerySubmitted += SearchBox_QuerySubmitted;
-                }
-            }
-            catch { }
-        }
-
-        private void LookupSite_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            var site = (MainPage.Current?.LookupSiteComboBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString();
-            if (!string.IsNullOrEmpty(site)) Services.SettingsService.LastLookupSite = site;
-            var text = MainPage.Current?.LookupSearchBox?.Text;
-            if (!string.IsNullOrWhiteSpace(text)) NavigateToSite(text);
-        }
-
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+
+            // 首次加载每日一句
+            await InitializeDailySentenceAsync();
+
+            // 如果有查词参数，则导航到查词
             if (e.Parameter is string term && !string.IsNullOrWhiteSpace(term))
             {
-                _currentQuery = term; AddToHistory(term);
-                DailySentenceCard.Visibility = Visibility.Collapsed; FabFavorite.Visibility = Visibility.Visible;
-                NavigateToSite(term); return;
+                _currentQuery = term;
+                AddToHistory(term);
+                NavigateToSite(term);
             }
-            _ = InitializeStartupNavigation(e.Parameter);
         }
 
-        private async Task InitializeStartupNavigation(object? navParam)
+        private async Task InitializeDailySentenceAsync()
         {
-            if (navParam is string term && !string.IsNullOrWhiteSpace(term))
-            {
-                ToggleDailySkeleton(false); DailySentenceCard.Visibility = Visibility.Collapsed; _currentQuery = term; AddToHistory(term); NavigateToSite(term); await Task.Delay(50); Web.Opacity = 1; return;
-            }
+            SkeletonLayer.Visibility = Visibility.Visible;
+            ContentLayer.Visibility = Visibility.Collapsed;
 
             var app = (App)Application.Current;
-            var cached = app.CachedDailySentence;
+            var data = app.CachedDailySentence ?? await GetDailySentenceData();
 
-            bool cacheUsable = cached != null && !string.IsNullOrWhiteSpace(cached.Caption) && !string.IsNullOrWhiteSpace(cached.En);
-            bool hasImageInView = ImgPic.Source != null;
-            bool hasPicUrl = !string.IsNullOrEmpty(cached?.PicUrl);
-
-            if (cacheUsable)
+            if (data != null)
             {
-                if (hasImageInView)
-                {
-                    TxtCaption.Text = cached!.Caption; TxtCaption.Visibility = Visibility.Visible;
-                    TxtDate.Text = cached.Date; TxtDate.Visibility = Visibility.Visible;
-                    TxtEn.Text = cached.En; ControlPanel.Visibility = Visibility.Visible;
-                    TxtZh.Text = cached.Zh; TxtZh.Visibility = Visibility.Visible;
-
-                    CaptionShimmer.Visibility = Visibility.Collapsed; DateShimmer.Visibility = Visibility.Collapsed;
-                    EnShimmer.Visibility = Visibility.Collapsed; ZhShimmer.Visibility = Visibility.Collapsed;
-                    ImageShimmer.Visibility = Visibility.Collapsed;
-                    Web.Opacity = 1; return;
-                }
-
-                bool needImageSkeleton = hasPicUrl && !hasImageInView;
-                ToggleDailySkeleton(true, includeImage: needImageSkeleton);
-                await Task.Delay(220); await ApplyDailySentenceDataAsync(cached!);
+                app.CachedDailySentence = data;
+                _currentData = data;
+                await ApplyDailySentenceDataAsync(data);
             }
             else
             {
-                ToggleDailySkeleton(true, includeImage: true);
-                DailySentenceData? daily = null;
-                try { daily = await GetDailySentenceData(); } catch { }
-                if (daily != null) { app.CachedDailySentence = daily; await Task.Delay(800); await ApplyDailySentenceDataAsync(daily); }
-                else { ToggleDailySkeleton(false); DailySentenceCard.Visibility = Visibility.Collapsed; }
+                SkeletonLayer.Visibility = Visibility.Collapsed;
+                MainPage.Current?.ShowError("加载每日一句失败");
             }
-
-            Web.Opacity = 1;
-        }
-
-        private async Task<DailySentenceData?> GetDailySentenceData()
-        {
-            try
-            {
-                using var client = new HttpClient();
-                var json = await client.GetStringAsync("https://open.iciba.com/dsapi/");
-                using var doc = JsonDocument.Parse(json);
-                var caption = doc.RootElement.TryGetProperty("caption", out var cap) ? cap.GetString() ?? "" : "";
-                var date = doc.RootElement.TryGetProperty("dateline", out var dl) ? dl.GetString() ?? "" : "";
-                var en = doc.RootElement.GetProperty("content").GetString() ?? "";
-                var zh = doc.RootElement.GetProperty("note").GetString() ?? "";
-                var tts = doc.RootElement.TryGetProperty("tts", out var t) ? t.GetString() ?? "" : "";
-                var pic = (doc.RootElement.TryGetProperty("picture2", out var p2) ? p2.GetString() : null) ?? (doc.RootElement.TryGetProperty("picture", out var p1) ? p1.GetString() : null) ?? "";
-                return new DailySentenceData { Caption = caption, Date = date, En = en, Zh = zh, PicUrl = pic, TtsUrl = tts };
-            }
-            catch { return null; }
         }
 
         private async Task ApplyDailySentenceDataAsync(DailySentenceData data)
         {
-            DailySentenceCard.Visibility = Visibility.Visible;
-            TxtCaption.Text = data.Caption; TxtCaption.Visibility = Visibility.Visible; CaptionShimmer.Visibility = Visibility.Collapsed;
-            TxtDate.Text = data.Date; TxtDate.Visibility = Visibility.Visible; DateShimmer.Visibility = Visibility.Collapsed;
-            TxtEn.Text = data.En; ControlPanel.Visibility = Visibility.Visible; EnShimmer.Visibility = Visibility.Collapsed;
-            TxtZh.Text = data.Zh; TxtZh.Visibility = Visibility.Visible; ZhShimmer.Visibility = Visibility.Collapsed;
+            // 更新文本内容
+            TxtCaption.Text = data.Caption ?? "Daily Sentence";
+            TxtDate.Text = data.Date ?? DateTime.Now.ToString("yyyy-MM-dd");
+            TxtEn.Text = data.En ?? "No content available";
+            TxtZh.Text = data.Zh ?? "暂无翻译";
+            _currentImageUrl = data.PicUrl;
 
-            BtnPlayTts.Click -= BtnPlayTts_Click;
-            if (!string.IsNullOrEmpty(data.TtsUrl)) BtnPlayTts.Click += BtnPlayTts_Click;
+            // 加载背景图和配图
+            if (!string.IsNullOrEmpty(data.PicUrl))
+            {
+                try
+                {
+                    var bitmap = new BitmapImage(new Uri(data.PicUrl));
+                    BackgroundImage.Source = bitmap;
+                }
+                catch { }
+            }
 
-            if (!string.IsNullOrWhiteSpace(data.PicUrl)) { if (ImgPic.Source != null) { ImgPic.Visibility = Visibility.Visible; ImageShimmer.Visibility = Visibility.Collapsed; } else await SetImageAsync(data.PicUrl); }
-            else { ImageShimmer.Visibility = Visibility.Collapsed; ImgPic.Visibility = Visibility.Collapsed; }
+            // 停止骨架屏动画
+            ShimmerStoryboard.Stop();
+
+            // 切换显示并淡入
+            SkeletonLayer.Visibility = Visibility.Collapsed;
+            ContentLayer.Visibility = Visibility.Visible;
+
+            var fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(600),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(fadeIn, ContentLayer);
+            Storyboard.SetTargetProperty(fadeIn, "Opacity");
+            var sb = new Storyboard();
+            sb.Children.Add(fadeIn);
+            sb.Begin();
+        }
+
+        // --- 查词：切换到 WebView 全屏 ---
+        public void NavigateToSite(string query)
+        {
+            FabFavorite.Visibility = Visibility.Collapsed;
+            if (string.IsNullOrWhiteSpace(query)) return;
+            _currentQuery = query;
+
+            // 隐藏每日一句，显示 WebView 容器
+            DailySentenceContainer.Visibility = Visibility.Collapsed;
+
+            WebViewContainer.Visibility = Visibility.Visible;
+
+            // 通知主页显示关闭按钮
+            MainPage.Current?.ShowCloseButton();
+
+            // 查词时：立即隐藏保存图片按钮
+            SaveImageButton.Visibility = Visibility.Collapsed;
+
+            var site = Services.SettingsService.LastLookupSite ?? "Youdao";
+            if (site == "Local")
+            {
+                ShowLocalDictionary(query);
+                // 本地词典查词完成后立即显示收藏按钮
+                FabFavorite.Visibility = Visibility.Visible;
+                return;
+            }
+
+            Web.Visibility = Visibility.Visible;
+            WebMask.Visibility = Visibility.Visible;
+            LocalDictionaryHost.Visibility = Visibility.Collapsed;
+
+            string url = site switch
+            {
+                "Google" => $"https://www.google.com/search?q=define%3A{Uri.EscapeDataString(query)}",
+                "Bing" => $"https://cn.bing.com/dict/search?q={Uri.EscapeDataString(query)}",
+                _ => $"https://dict.youdao.com/result?word={Uri.EscapeDataString(query)}&lang=en"
+            };
 
             try
             {
-                DailySentenceCard.Opacity = 0;
-                DailySentenceCard.RenderTransform = new Windows.UI.Xaml.Media.TranslateTransform { Y = 20 };
-
-                var sb = new Windows.UI.Xaml.Media.Animation.Storyboard();
-                var fadeAnim = new Windows.UI.Xaml.Media.Animation.DoubleAnimation { From = 0, To = 1, Duration = new Duration(TimeSpan.FromMilliseconds(300)), EasingFunction = new Windows.UI.Xaml.Media.Animation.CubicEase { EasingMode = Windows.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
-                Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(fadeAnim, DailySentenceCard);
-                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fadeAnim, "Opacity");
-                sb.Children.Add(fadeAnim);
-
-                var translateAnim = new Windows.UI.Xaml.Media.Animation.DoubleAnimation { From = 20, To = 0, Duration = new Duration(TimeSpan.FromMilliseconds(300)), EasingFunction = new Windows.UI.Xaml.Media.Animation.CubicEase { EasingMode = Windows.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
-                Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(translateAnim, DailySentenceCard);
-                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(translateAnim, "(UIElement.RenderTransform).(TranslateTransform.Y)");
-                sb.Children.Add(translateAnim);
-
-                sb.Begin();
+                if (Web.Source?.ToString() != url)
+                    Web.Source = new Uri(url);
             }
             catch { }
         }
 
-        private void BtnPlayTts_Click(object sender, RoutedEventArgs e)
+        // --- 返回每日一句 ---
+        public void ReturnToDailySentence()
         {
-            var app = (App)Application.Current;
-            var data = app.CachedDailySentence;
-            if (string.IsNullOrEmpty(_currentQuery) && data != null && !string.IsNullOrEmpty(data.TtsUrl))
-            {
-                var player = new MediaPlayer { Source = MediaSource.CreateFromUri(new Uri(data.TtsUrl)) };
-                player.Play();
-            }
+            // 隐藏 WebView，显示每日一句
+            WebViewContainer.Visibility = Visibility.Collapsed;
+            DailySentenceContainer.Visibility = Visibility.Visible;
+
+            // 重置状态
+            Web.Visibility = Visibility.Collapsed;
+            WebMask.Visibility = Visibility.Collapsed;
+            LocalDictionaryHost.Visibility = Visibility.Collapsed;
+
+            // 收藏按钮隐藏
+            FabFavorite.Visibility = Visibility.Collapsed;
+            // 保存按钮重新显示
+            SaveImageButton.Visibility = Visibility.Visible;
+
+            _currentQuery = string.Empty;
+            if (MainPage.Current?.LookupSearchBoxRef != null)
+                MainPage.Current.LookupSearchBoxRef.Text = "";
         }
 
-        private void ToggleDailySkeleton(bool isLoading, bool includeImage = true)
+        // --- 保存图片 ---
+        private async void SaveImage_Click(object sender, RoutedEventArgs e)
         {
-            if (isLoading)
-            {
-                DailySentenceCard.Visibility = Visibility.Visible;
-                CaptionShimmer.Visibility = Visibility.Visible; DateShimmer.Visibility = Visibility.Visible; EnShimmer.Visibility = Visibility.Visible; ZhShimmer.Visibility = Visibility.Visible;
-                if (includeImage) { ImageShimmer.Visibility = Visibility.Visible; ImgPic.Visibility = Visibility.Collapsed; }
-                TxtCaption.Visibility = Visibility.Collapsed; TxtDate.Visibility = Visibility.Collapsed; ControlPanel.Visibility = Visibility.Collapsed; TxtZh.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                CaptionShimmer.Visibility = Visibility.Collapsed; DateShimmer.Visibility = Visibility.Collapsed; EnShimmer.Visibility = Visibility.Collapsed; ZhShimmer.Visibility = Visibility.Collapsed;
-                if (includeImage) ImageShimmer.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private async Task SetImageAsync(string picUrl)
-        {
-            ImageShimmer.Visibility = Visibility.Visible; ImgPic.Visibility = Visibility.Collapsed;
-            if (string.IsNullOrWhiteSpace(picUrl)) { ImageShimmer.Visibility = Visibility.Collapsed; ImgPic.Visibility = Visibility.Collapsed; return; }
-
-            var bmp = new BitmapImage();
-            bmp.ImageOpened += (s, e) => { var _ = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => { ImgPic.Source = bmp; ImgPic.Visibility = Visibility.Visible; ImageShimmer.Visibility = Visibility.Collapsed; }); };
-            bmp.ImageFailed += (s, e) => { var _ = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => { ImgPic.Visibility = Visibility.Collapsed; ImageShimmer.Visibility = Visibility.Collapsed; }); };
+            if (string.IsNullOrEmpty(_currentImageUrl)) return;
 
             try
             {
-                if (picUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                var bytes = await _http.GetByteArrayAsync(_currentImageUrl);
+                var picker = new FileSavePicker
                 {
-                    var comma = picUrl.IndexOf(',');
-                    if (comma > 0 && comma < picUrl.Length - 1)
-                    {
-                        var base64 = picUrl[(comma + 1)..];
-                        var bytes = Convert.FromBase64String(base64);
-                        using var stream = new InMemoryRandomAccessStream();
-                        using (var writer = new DataWriter(stream)) { writer.WriteBytes(bytes); await writer.StoreAsync(); }
-                        stream.Seek(0);
-                        await bmp.SetSourceAsync(stream);
-                    }
-                    else { ImageShimmer.Visibility = Visibility.Collapsed; ImgPic.Visibility = Visibility.Collapsed; }
-                }
-                else
+                    SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+                    SuggestedFileName = $"DailySentence_{DateTime.Now:yyyyMMdd}"
+                };
+                picker.FileTypeChoices.Add("Image", new List<string> { ".jpg", ".png" });
+
+                var file = await picker.PickSaveFileAsync();
+                if (file != null)
                 {
-                    using var resp = await _http.GetAsync(picUrl, HttpCompletionOption.ResponseHeadersRead);
-                    resp.EnsureSuccessStatusCode();
-                    await using var netStream = await resp.Content.ReadAsStreamAsync();
-                    using var mem = new InMemoryRandomAccessStream();
-                    await netStream.CopyToAsync(mem.AsStreamForWrite());
-                    mem.Seek(0);
-                    await bmp.SetSourceAsync(mem);
+                    await Windows.Storage.FileIO.WriteBytesAsync(file, bytes);
+                    MainPage.Current?.ShowSuccess("图片已保存");
                 }
             }
-            catch { ImgPic.Visibility = Visibility.Collapsed; ImageShimmer.Visibility = Visibility.Collapsed; }
-        }
-
-        private void TearDownWebView()
-        {
-            try { Web.NavigateToString("<html></html>"); } catch { }
-            Web.Source = null;
-            WebMask.Visibility = Visibility.Collapsed;
-            FabFavorite.Visibility = Visibility.Collapsed;
-            Web.Visibility = Visibility.Collapsed;
-        }
-
-        private void SafeSetWebSource(string url)
-        {
-            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            catch
             {
-                try { Web.Source = uri; }
-                catch (ArgumentException) { }
+                MainPage.Current?.ShowError("保存失败");
             }
         }
 
-        public class DailySentenceData { public string Caption { get; set; } = ""; public string Date { get; set; } = ""; public string En { get; set; } = ""; public string Zh { get; set; } = ""; public string PicUrl { get; set; } = ""; public string TtsUrl { get; set; } = ""; }
+        // --- 刷新每日一句 ---
+        private async void RefreshDailySentence_Click(object sender, RoutedEventArgs e)
+        {
+            var app = (App)Application.Current;
+            app.CachedDailySentence = null; // 清除缓存
+            await InitializeDailySentenceAsync();
+            MainPage.Current?.ShowSuccess("已刷新");
+        }
+
+        // --- 分享句子 ---
+        private void ShareSentence_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentData == null) return;
+
+            var dataTransferManager = DataTransferManager.GetForCurrentView();
+            dataTransferManager.DataRequested += (s, args) =>
+            {
+                var request = args.Request;
+                request.Data.Properties.Title = "每日一句";
+                request.Data.SetText($"{_currentData.En}\n\n{_currentData.Zh}\n\n—— {_currentData.Date}");
+            };
+            DataTransferManager.ShowShareUI();
+        }
+
+        // --- 播放发音 ---
+        private void BtnPlayTts_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentData != null && !string.IsNullOrEmpty(_currentData.TtsUrl))
+            {
+                try
+                {
+                    var player = new MediaPlayer
+                    {
+                        Source = MediaSource.CreateFromUri(new Uri(_currentData.TtsUrl)),
+                        AutoPlay = true
+                    };
+                }
+                catch
+                {
+                    MainPage.Current?.ShowError("播放失败");
+                }
+            }
+        }
+
+        // --- WebView 导航完成 ---
+        private void Web_NavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
+        {
+            WebMask.Visibility = Visibility.Collapsed;
+            if (!string.IsNullOrEmpty(_currentQuery))
+                FabFavorite.Visibility = Visibility.Visible;
+        }
+
+        // --- 收藏 ---
+        private void FabFavorite_Click(object sender, RoutedEventArgs e)
+        {
+            Services.FavoritesService.Add(_currentQuery);
+            MainPage.Current?.ShowSuccess("已收藏");
+        }
+
+        // --- 本地词典 ---
+        private void ShowLocalDictionary(string q)
+        {
+            LocalDictionaryHost.Visibility = Visibility.Visible;
+            Web.Visibility = Visibility.Collapsed;
+            WebMask.Visibility = Visibility.Collapsed;
+
+            LocalWordText.Text = q;
+            LocalPronunciation.Text = $"/{q}/";
+            LocalPartOfSpeech.Text = "n.";
+        }
+
+        // --- 历史记录 ---
+        public void AddToHistory(string term)
+        {
+            if (!_history.Contains(term))
+                _history.Insert(0, term);
+        }
+
+        // --- 数据模型 ---
+        public class DailySentenceData
+        {
+            public string Caption { get; set; }
+            public string Date { get; set; }
+            public string En { get; set; }
+            public string Zh { get; set; }
+            public string PicUrl { get; set; }
+            public string TtsUrl { get; set; }
+        }
+
+        private async Task<DailySentenceData> GetDailySentenceData()
+        {
+            try
+            {
+                var json = await _http.GetStringAsync("https://open.iciba.com/dsapi/");
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                string val(string prop) =>
+                    root.TryGetProperty(prop, out var el) ? (el.GetString() ?? "") : "";
+
+                return new DailySentenceData
+                {
+                    Caption = val("caption"),
+                    Date = val("dateline"),
+                    En = val("content"),
+                    Zh = val("note"),
+                    PicUrl = val("picture2").Length > 0 ? val("picture2") : val("picture"),
+                    TtsUrl = val("tts")
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }

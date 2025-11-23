@@ -8,199 +8,264 @@
     mc:Ignorable="d">
 
     <Page.Resources>
-        <ResourceDictionary>
-            <!-- 按钮与骨架资源 -->
-            <SolidColorBrush x:Key="PlayButtonForeground" Color="White"/>
-            <SolidColorBrush x:Key="PlayButtonBgNormal" Color="{ThemeResource SystemAccentColor}" Opacity="0.18"/>
-            <SolidColorBrush x:Key="PlayButtonBgActive" Color="{ThemeResource SystemAccentColor}" Opacity="0.70"/>
-
-            <!-- 骨架底色（接近微软商店） -->
-            <SolidColorBrush x:Key="SkeletonFillBrush" Color="{ThemeResource SystemAccentColor}" Opacity="0.08"/>
-        </ResourceDictionary>
+        <!-- 骨架屏闪光动画 -->
+        <Storyboard x:Name="ShimmerStoryboard" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="ShimmerTransform" 
+                             Storyboard.TargetProperty="X"
+                             From="-500" To="1200" 
+                             Duration="0:0:1.8"/>
+        </Storyboard>
     </Page.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <!-- 每日一句全屏展示 -->
+        <Grid x:Name="DailySentenceContainer" Visibility="Visible">
+            <!-- 背景图片层 -->
+            <Grid>
+                <Image x:Name="BackgroundImage" 
+           Stretch="UniformToFill"
+           Opacity="0.4"/>
 
-        <!-- 顶部卡片（覆盖两行，位于最上层） -->
-        <Grid Grid.Row="0" Grid.RowSpan="2" Canvas.ZIndex="2" Margin="12" VerticalAlignment="Stretch">
-            <Border x:Name="DailySentenceCard"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="8"
-                    Padding="12"
-                    Visibility="Visible">
-                <Border.Shadow>
-                    <ThemeShadow/>
-                </Border.Shadow>
+                <!-- 渐变遮罩（上下遮罩 + 跟随系统主题） -->
+                <Border IsHitTestVisible="False">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <!-- 顶部暗 / 亮遮罩 -->
+                            <GradientStop
+                Color="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
+                Offset="0"/>
 
-                <Grid x:Name="CardGrid">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <!-- Caption -->
-                        <RowDefinition Height="Auto"/>
-                        <!-- Date -->
-                        <RowDefinition Height="Auto"/>
-                        <!-- En + TTS -->
-                        <RowDefinition Height="Auto"/>
-                        <!-- Zh -->
-                        <RowDefinition Height="*"/>
-                        <!-- Image -->
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                            <!-- 中间透明 -->
+                            <GradientStop Color="Transparent"
+                          Offset="0.4"/>
+                            <GradientStop Color="Transparent"
+                          Offset="0.6"/>
 
-                    <!-- 条状辉光（商店式效果），通过 VisualState 控制 -->
-                    <Rectangle x:Name="GlowBar"
-                               Grid.Row="0"
-                               Height="4"
-                               VerticalAlignment="Top"
-                               Opacity="0"
-                               RadiusX="4"
-                               RadiusY="4"
-                               IsHitTestVisible="False">
-                        <Rectangle.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#00FFFFFF" Offset="0"/>
-                                <GradientStop Color="#66FFFFFF" Offset="0.5"/>
-                                <GradientStop Color="#00FFFFFF" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Rectangle.Fill>
-                    </Rectangle>
+                            <!-- 底部暗 / 亮遮罩 -->
+                            <GradientStop
+                Color="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
+                Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+            </Grid>
 
-                    <!-- Caption 骨架 + 文本 -->
-                    <Grid Grid.Row="0" Height="20" Margin="0,8,0,0">
-                        <Rectangle x:Name="CaptionShimmer"
-                                   Fill="{StaticResource SkeletonFillBrush}"
-                                   RadiusX="4"
-                                   RadiusY="4"
-                                   Visibility="Collapsed"/>
-                        <TextBlock x:Name="TxtCaption"
-                                   Style="{ThemeResource BodyStrongTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                   Visibility="Collapsed"/>
-                    </Grid>
+            <!-- 骨架屏 -->
+            <Grid x:Name="SkeletonLayer" Visibility="Visible">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel MaxWidth="900" 
+                                Margin="48,80,48,48" 
+                                Spacing="24"
+                                HorizontalAlignment="Center">
+                        <Rectangle Width="300" Height="36" RadiusX="8" RadiusY="8" 
+                                   Fill="{ThemeResource SystemControlBackgroundBaseLowBrush}"/>
+                        <Rectangle Width="250" Height="20" RadiusX="6" RadiusY="6" 
+                                   Fill="{ThemeResource SystemControlBackgroundBaseLowBrush}"/>
+                        <Rectangle Height="120" RadiusX="12" RadiusY="12" 
+                                   Fill="{ThemeResource SystemControlBackgroundBaseLowBrush}" 
+                                   Margin="0,40,0,0"/>
+                        <Rectangle Height="80" RadiusX="12" RadiusY="12" 
+                                   Fill="{ThemeResource SystemControlBackgroundBaseLowBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
 
-                    <!-- Date 骨架 + 文本 -->
-                    <Grid Grid.Row="1" Margin="0,4,0,0" Height="16">
-                        <Rectangle x:Name="DateShimmer"
-                                   Fill="{StaticResource SkeletonFillBrush}"
-                                   RadiusX="4"
-                                   RadiusY="4"
-                                   Width="120"
-                                   HorizontalAlignment="Left"
-                                   Visibility="Collapsed"/>
-                        <TextBlock x:Name="TxtDate"
-                                   Style="{ThemeResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Visibility="Collapsed"/>
-                    </Grid>
+                <!-- 闪光效果 -->
+                <Rectangle Fill="White" Opacity="0.08">
+                    <Rectangle.RenderTransform>
+                        <TranslateTransform x:Name="ShimmerTransform" X="-500"/>
+                    </Rectangle.RenderTransform>
+                </Rectangle>
+            </Grid>
 
-                    <!-- 英文骨架 + 喇叭 -->
-                    <Grid Grid.Row="2" Margin="0,8,0,0">
-                        <Rectangle x:Name="EnShimmer"
-                                   Fill="{StaticResource SkeletonFillBrush}"
-                                   RadiusX="4"
-                                   RadiusY="4"
-                                   Height="32"
-                                   HorizontalAlignment="Stretch"
-                                   Visibility="Collapsed"/>
-                        <StackPanel Orientation="Horizontal"
-                                    VerticalAlignment="Center"
-                                    Spacing="8"
-                                    Visibility="Collapsed"
-                                    x:Name="ControlPanel">
-                            <TextBlock x:Name="TxtEn"
-                                       TextWrapping="WrapWholeWords"
-                                       Style="{ThemeResource BodyTextBlockStyle}"
-                                       FontSize="20"
+            <!-- 内容层 -->
+            <ScrollViewer x:Name="ContentLayer" 
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel MaxWidth="900" 
+                            Margin="48,80,48,48" 
+                            Spacing="32"
+                            HorizontalAlignment="Center">
+
+                    <!-- 头部：标题和日期 -->
+                    <StackPanel Spacing="16" HorizontalAlignment="Center">
+                        <TextBlock x:Name="TxtCaption" 
+                                   Text="Daily Sentence"
+                                   FontSize="42" 
+                                   FontWeight="Bold"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+
+                        <Border Style="{ThemeResource AccentButtonStyle}"
+                                CornerRadius="16"
+                                Padding="16,8"
+                                HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE8BF;" 
+                                          FontSize="16"
+                                          Foreground="White"/>
+                                <TextBlock x:Name="TxtDate" 
+                                           Text="2024-12-21"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="White"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- 英文句子卡片 -->
+                    <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Padding="40,32">
+                        <StackPanel Spacing="20">
+                            <Grid>
+                                <TextBlock Text="ENGLISH" 
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Opacity="0.6"
+                                           VerticalAlignment="Center"/>
+
+                                <Button x:Name="BtnPlayTts" 
+                                        Click="BtnPlayTts_Click"
+                                        Width="48" Height="48"
+                                        CornerRadius="24"
+                                        HorizontalAlignment="Right"
+                                        Style="{ThemeResource AccentButtonStyle}"
+                                        BorderThickness="0"
+                                        ToolTipService.ToolTip="播放发音">
+                                    <FontIcon Glyph="&#xE768;" 
+                                              FontSize="18"/>
+                                </Button>
+                            </Grid>
+
+                            <TextBlock x:Name="TxtEn" 
+                                       Text="Loading..."
+                                       FontSize="24"
+                                       FontWeight="Medium"
+                                       TextWrapping="Wrap"
+                                       LineHeight="40"
+                                       TextAlignment="Center"
                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                            <Button x:Name="BtnPlayTts"
-                                    Width="32" Height="32"
-                                    CornerRadius="8"
-                                    Background="{StaticResource PlayButtonBgNormal}"
-                                    Foreground="{StaticResource PlayButtonForeground}"
-                                    ToolTipService.ToolTip="播放发音">
-                                <SymbolIcon Symbol="Volume"/>
-                            </Button>
                         </StackPanel>
-                    </Grid>
+                    </Border>
 
-                    <!-- 中文骨架 + 文本 -->
-                    <Grid Grid.Row="3" Height="16" Margin="0,4,0,0">
-                        <Rectangle x:Name="ZhShimmer"
-                                   Fill="{StaticResource SkeletonFillBrush}"
-                                   RadiusX="4"
-                                   RadiusY="4"
-                                   Visibility="Collapsed"/>
-                        <TextBlock x:Name="TxtZh"
-                                   TextWrapping="WrapWholeWords"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Visibility="Collapsed"/>
-                    </Grid>
+                    <!-- 中文翻译卡片 -->
+                    <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Padding="40,32">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="中文翻译" 
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Opacity="0.6"
+                                       TextAlignment="Left"/>
 
-                    <!-- 图片骨架 + 图片 -->
-                    <Grid Grid.Row="4"
-                          CornerRadius="6"
-                          Margin="0,4,0,4"
-                          MinHeight="528"
-                          Height="528"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                        <Rectangle x:Name="ImageShimmer"
-                                   Fill="{StaticResource SkeletonFillBrush}"
-                                   RadiusX="6"
-                                   RadiusY="6"
-                                   Visibility="Collapsed"/>
-                        <Image x:Name="ImgPic"
-                               Stretch="Uniform"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Visibility="Collapsed"/>
-                    </Grid>
-                </Grid>
+                            <TextBlock x:Name="TxtZh" 
+                                       Text="加载中..."
+                                       FontSize="20"
+                                       TextWrapping="Wrap"
+                                       LineHeight="36"
+                                       TextAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 底部操作栏 -->
+                    <StackPanel Orientation="Horizontal" 
+                                HorizontalAlignment="Center"
+                                Spacing="16"
+                                Margin="0,24,0,0">
+                        <Button Click="RefreshDailySentence_Click"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                CornerRadius="12"
+                                Padding="24,12">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16"/>
+                                <TextBlock Text="刷新" FontSize="15"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Click="ShareSentence_Click"
+                                CornerRadius="12"
+                                Padding="24,12">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE72D;" FontSize="16"/>
+                                <TextBlock Text="分享" FontSize="15"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- WebView 全屏查词 -->
+        <Grid x:Name="WebViewContainer" Visibility="Collapsed">
+            <!-- 加载遮罩 -->
+            <Border x:Name="WebMask" 
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                    Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" 
+                            VerticalAlignment="Center"
+                            Spacing="20">
+                    <muxc:ProgressRing IsActive="True" 
+                                       Width="56" Height="56"/>
+                    <TextBlock Text="加载中..." 
+                               FontSize="16"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
             </Border>
 
-            <!-- 状态管理：控制 GlowBar 的显隐 -->
-            <VisualStateManager.VisualStateGroups>
-                <VisualStateGroup>
-                    <VisualState x:Name="Normal"/>
-                    <VisualState x:Name="Loading">
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetName="GlowBar"
-                                             Storyboard.TargetProperty="Opacity"
-                                             To="0.22"
-                                             Duration="0:0:0.25"/>
-                        </Storyboard>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateManager.VisualStateGroups>
-        </Grid>
+            <!-- WebView -->
+            <muxc:WebView2 x:Name="Web" 
+                           NavigationCompleted="Web_NavigationCompleted"/>
 
-        <!-- WebView 区域（在底层） -->
-        <Grid Grid.Row="1" Canvas.ZIndex="0">
-            <Border x:Name="WebMask"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    Visibility="Collapsed"/>
-            <muxc:WebView2 x:Name="Web"
-                           NavigationCompleted="Web_NavigationCompleted"
-                           Visibility="Collapsed"/>
+            <!-- 本地词典 -->
+            <Grid x:Name="LocalDictionaryHost" 
+                  Visibility="Collapsed" 
+                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                <ScrollViewer Padding="64,48">
+                    <StackPanel Spacing="32" MaxWidth="900">
+                        <TextBlock x:Name="LocalWordText" 
+                                   FontSize="48"
+                                   FontWeight="Bold"/>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Name="LocalPronunciation" 
+                                       FontSize="24"
+                                       Foreground="{ThemeResource SystemAccentColor}"/>
+                            <TextBlock x:Name="LocalPartOfSpeech" 
+                                       FontSize="18"
+                                       FontStyle="Italic"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <ItemsControl x:Name="LocalDefinitions"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- 收藏按钮 -->
             <Button x:Name="FabFavorite"
                     Click="FabFavorite_Click"
-                    Width="56" Height="56"
-                    CornerRadius="8"
-                    HorizontalAlignment="Right"
+                    HorizontalAlignment="Right" 
                     VerticalAlignment="Bottom"
-                    Margin="16"
-                    ToolTipService.ToolTip="收藏当前查询词汇"
-                    Visibility="Collapsed">
-                <Button.Background>
-                    <AcrylicBrush TintColor="{ThemeResource SystemAccentColor}"
-                                  TintOpacity="0.4"
-                                  FallbackColor="{ThemeResource SystemAccentColor}"/>
-                </Button.Background>
-                <SymbolIcon Symbol="Favorite" Foreground="White"/>
+                    Width="64" Height="64" 
+                    CornerRadius="32"
+                    Visibility="Collapsed"
+                    Margin="0,0,40,40"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    BorderThickness="0"
+                    ToolTipService.ToolTip="收藏此词">
+                <FontIcon Glyph="&#xE734;" FontSize="22"/>
             </Button>
         </Grid>
+        <!-- 图片操作按钮 -->
+        <Button Click="SaveImage_Click" x:Name="SaveImageButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24" Width="48" Height="48" CornerRadius="24" Style="{ThemeResource AccentButtonStyle}" BorderThickness="0" ToolTipService.ToolTip="保存图片">
+            <FontIcon Glyph="&#xE74E;" FontSize="18"/>
+        </Button>
     </Grid>
 </Page>

@@ -7,22 +7,8 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- 引用 WinUI 2 控件默认资源，避免启动时报控件缺失 -->
                 <controls:XamlControlsResources />
             </ResourceDictionary.MergedDictionaries>
-
-            <!-- 可选：标题栏相关颜色（保留你原先定义） -->
-            <Color x:Key="TitleBarButtonForegroundColorLight">#FF000000</Color>
-            <Color x:Key="TitleBarButtonForegroundColorDark">#FFFFFFFF</Color>
-            <Color x:Key="TitleBarButtonBackgroundTransparent">#00000000</Color>
-
-            <!-- 浅色主题下的悬停/按下背景 -->
-            <Color x:Key="TitleBarButtonHoverBackgroundLight">#33000000</Color>
-            <Color x:Key="TitleBarButtonPressedBackgroundLight">#55000000</Color>
-
-            <!-- 深色主题下的悬停/按下背景 -->
-            <Color x:Key="TitleBarButtonHoverBackgroundDark">#33FFFFFF</Color>
-            <Color x:Key="TitleBarButtonPressedBackgroundDark">#55FFFFFF</Color>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

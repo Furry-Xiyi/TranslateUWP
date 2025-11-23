@@ -146,6 +146,8 @@ namespace TranslatorApp.Pages
         private void LoadApiOptions()
         {
             CbApi.Items.Clear();
+            // 添加本地翻译选项
+            CbApi.Items.Add(new ComboBoxItem { Content = "本地翻译 (离线)", Tag = "Local" });
             CbApi.Items.Add(new ComboBoxItem { Content = "Bing", Tag = "Bing" });
             CbApi.Items.Add(new ComboBoxItem { Content = "百度", Tag = "Baidu" });
             CbApi.Items.Add(new ComboBoxItem { Content = "有道", Tag = "Youdao" });
@@ -161,10 +163,11 @@ namespace TranslatorApp.Pages
             }
             if (CbApi.SelectedItem == null) CbApi.SelectedIndex = 0;
 
+            // 监听切换，保存最后使用的 API
             CbApi.SelectionChanged += (s, e) =>
             {
                 if (CbApi.SelectedItem is ComboBoxItem selected)
-                    SettingsService.LastUsedApi = selected.Tag as string ?? "Bing";
+                    SettingsService.LastUsedApi = selected.Tag as string ?? "Local";
             };
         }
 
@@ -274,38 +277,43 @@ namespace TranslatorApp.Pages
 
             var api = (CbApi.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Bing";
 
-            bool hasKey = api switch
+            // --- 关键改动：如果是本地翻译，跳过 API Key 检查 ---
+            if (api != "Local")
             {
-                "Bing" => !string.IsNullOrWhiteSpace(SettingsService.BingApiKey),
-                "Baidu" => !string.IsNullOrWhiteSpace(SettingsService.BaiduAppId) &&
-                           !string.IsNullOrWhiteSpace(SettingsService.BaiduSecret),
-                "Youdao" => !string.IsNullOrWhiteSpace(SettingsService.YoudaoAppKey) &&
-                            !string.IsNullOrWhiteSpace(SettingsService.YoudaoSecret),
-                _ => false
-            };
+                bool hasKey = api switch
+                {
+                    "Bing" => !string.IsNullOrWhiteSpace(SettingsService.BingApiKey),
+                    "Baidu" => !string.IsNullOrWhiteSpace(SettingsService.BaiduAppId) &&
+                               !string.IsNullOrWhiteSpace(SettingsService.BaiduSecret),
+                    "Youdao" => !string.IsNullOrWhiteSpace(SettingsService.YoudaoAppKey) &&
+                                !string.IsNullOrWhiteSpace(SettingsService.YoudaoSecret),
+                    _ => false
+                };
 
-            if (!hasKey)
-            {
-                if (MainPage.Current != null)
+                if (!hasKey)
                 {
-                    MainPage.Current.ShowWarning($"{api} API 未填写");
-                    // 仍然给出导航引导：延迟后跳到设置页
-                    await Task.Delay(200);
-                    Frame.Navigate(typeof(SettingsPage));
+                    if (MainPage.Current != null)
+                    {
+                        MainPage.Current.ShowWarning($"{api} API 未填写");
+                        await Task.Delay(200);
+                        Frame.Navigate(typeof(SettingsPage));
+                    }
+                    else
+                    {
+                        AppToast($"{api} API 未填写，请前往设置页填写 API 密钥。");
+                        await Task.Delay(200);
+                        Frame.Navigate(typeof(SettingsPage));
+                    }
+                    return;
                 }
-                else
-                {
-                    AppToast($"{api} API 未填写，请前往设置页填写 API 密钥。");
-                    await Task.Delay(200);
-                    Frame.Navigate(typeof(SettingsPage));
-                }
-                return;
             }
 
+            // 获取语言设置和文本
             var sourceLang = ((CbFromLang.SelectedItem as ComboBoxItem)?.Tag?.ToString()) ?? "auto";
             var targetLang = ((CbToLang.SelectedItem as ComboBoxItem)?.Tag?.ToString()) ?? "zh";
             var text = TbInput.Text?.Trim() ?? string.Empty;
 
+            // 如果源语和目标语一致，直接输出原文
             if (!string.IsNullOrEmpty(text) && sourceLang != "auto" && sourceLang == targetLang)
             {
                 TbOutput.Text = text;
@@ -320,17 +328,30 @@ namespace TranslatorApp.Pages
 
             try
             {
-                var result = await TranslationService.TranslateAsync(
-                    provider: api,
-                    text: text,
-                    from: sourceLang,
-                    to: targetLang,
-                    cancellationToken: _cts.Token);
+                string result;
+
+                // --- 核心分流逻辑 ---
+                if (api == "Local")
+                {
+                    // 调用 Services/LocalTranslationService.cs
+                    result = await LocalTranslationService.TranslateLocalAsync(text, sourceLang);
+                }
+                else
+                {
+                    // 原有在线翻译
+                    result = await TranslationService.TranslateAsync(
+                        provider: api,
+                        text: text,
+                        from: sourceLang,
+                        to: targetLang,
+                        cancellationToken: _cts.Token);
+                }
 
                 TbOutput.Text = result;
             }
             catch (OperationCanceledException)
             {
+                // 用户取消了请求
             }
             catch (Exception ex)
             {

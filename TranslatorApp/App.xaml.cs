@@ -54,15 +54,21 @@ namespace TranslatorApp
         private const string YoudaoDarkCss = @":root{ color-scheme: dark; } html, body{ background:#0f0f0f !important; color:#ddd !important; } a{ color:#6fb1ff !important; }";
         private static bool isClosing = false;
 
-        private UIElement? _dragElement;
-        private FrameworkElement? _customRegion;
-        private FrameworkElement? _accountElement;
-        private FrameworkElement? _centerHost;
-        private CoreApplicationViewTitleBar? _coreTitleBar;
-        private bool _titlebarRegistered = false;
-        private double _leftInset = 0;
-        private double _rightInset = 0;
-        private double _rawPixelsPerViewPixel = 1.0;
+        // OAuth 应用配置（请确保 Azure 应用注册中已添加重定向 URI：myapp://auth）
+        private const string OAuthClientId = "63de19bb-351b-40e8-8a37-cb657eb6e685";
+        private const string OAuthRedirectUri = "myapp://auth";
+
+        // 注意：持久化登录需要 offline_access
+        private const string OAuthScopes = "openid profile offline_access User.Read Files.ReadWrite.AppFolder";
+
+        // PasswordVault 存储标识
+        private const string VaultResource = "TranslatorApp.MSAL";
+        private const string VaultUser = "DefaultUser";
+
+        // 运行时令牌状态（内存缓存）
+        private static string? _accessToken;
+        private static DateTimeOffset _accessTokenExpires = DateTimeOffset.MinValue;
+        private static string? _refreshToken;
 
         public App()
         {
@@ -74,12 +80,24 @@ namespace TranslatorApp
         {
             try
             {
-                // 删除本地缓存文件
-                if (File.Exists(CacheFilePath))
-                    File.Delete(CacheFilePath);
-
                 // 清空 GraphClient
                 GraphClient = null;
+
+                // 清空内存状态
+                _accessToken = null;
+                _accessTokenExpires = DateTimeOffset.MinValue;
+                _refreshToken = null;
+
+                // 清除 PasswordVault 中的 refresh_token
+                ClearRefreshToken();
+
+                // 如果你仍然保留了旧的 msal_cache.bin 文件，这里一并删除
+                try
+                {
+                    if (File.Exists(CacheFilePath))
+                        File.Delete(CacheFilePath);
+                }
+                catch { }
 
                 Debug.WriteLine("[App] 已退出 Microsoft 账号");
             }
@@ -87,8 +105,202 @@ namespace TranslatorApp
             {
                 Debug.WriteLine("[App] 退出流程异常: " + ex);
             }
+
+            await Task.CompletedTask;
+        }
+        // Graph 调用前确保有最新的 access_token
+        private async Task<string> EnsureAccessTokenAsync()
+        {
+            // 若 access_token 仍有效（提前 2 分钟），直接返回
+            if (!string.IsNullOrWhiteSpace(_accessToken) &&
+                DateTimeOffset.UtcNow < _accessTokenExpires - TimeSpan.FromMinutes(2))
+            {
+                return _accessToken!;
+            }
+
+            // 尝试用 refresh_token 续期
+            var rt = _refreshToken ?? LoadRefreshToken();
+            if (!string.IsNullOrWhiteSpace(rt))
+            {
+                var token = await RefreshAccessTokenAsync(rt!);
+                if (!string.IsNullOrWhiteSpace(token.AccessToken))
+                {
+                    _accessToken = token.AccessToken;
+                    _accessTokenExpires = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn);
+                    if (!string.IsNullOrWhiteSpace(token.RefreshToken))
+                    {
+                        _refreshToken = token.RefreshToken;
+                        SaveRefreshToken(token.RefreshToken);
+                    }
+                    return _accessToken!;
+                }
+            }
+
+            // 没有可用令牌，抛出让上层触发交互登录
+            throw new UnauthorizedAccessException("Access token 不可用，需要交互登录。");
+        }
+        private sealed class TokenResponse
+        {
+            public string AccessToken { get; set; } = "";
+            public string? RefreshToken { get; set; }
+            public int ExpiresIn { get; set; } = 3600;
+            public string TokenType { get; set; } = "Bearer";
         }
 
+        private async Task<TokenResponse> ExchangeCodeForTokenAsync(string code, string codeVerifier)
+        {
+            using var http = new HttpClient();
+            var form = new Dictionary<string, string>
+    {
+        { "client_id", OAuthClientId },
+        { "redirect_uri", OAuthRedirectUri },
+        { "grant_type", "authorization_code" },
+        { "code", code },
+        { "code_verifier", codeVerifier },
+        { "scope", OAuthScopes }
+    };
+
+            var resp = await http.PostAsync(
+                "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                new FormUrlEncodedContent(form));
+
+            var json = await resp.Content.ReadAsStringAsync();
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var token = new TokenResponse
+            {
+                AccessToken = root.TryGetProperty("access_token", out var at) ? at.GetString() ?? "" : "",
+                RefreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null,
+                ExpiresIn = root.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600,
+                TokenType = root.TryGetProperty("token_type", out var tt) ? tt.GetString() ?? "Bearer" : "Bearer"
+            };
+
+            if (string.IsNullOrWhiteSpace(token.AccessToken))
+                throw new InvalidOperationException("未能获取 Access Token：" + json);
+
+            return token;
+        }
+
+        private async Task<TokenResponse> RefreshAccessTokenAsync(string refreshToken)
+        {
+            using var http = new HttpClient();
+            var form = new Dictionary<string, string>
+    {
+        { "client_id", OAuthClientId },
+        { "redirect_uri", OAuthRedirectUri },
+        { "grant_type", "refresh_token" },
+        { "refresh_token", refreshToken },
+        { "scope", OAuthScopes }
+    };
+
+            var resp = await http.PostAsync(
+                "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                new FormUrlEncodedContent(form));
+
+            var json = await resp.Content.ReadAsStringAsync();
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var token = new TokenResponse
+            {
+                AccessToken = root.TryGetProperty("access_token", out var at) ? at.GetString() ?? "" : "",
+                RefreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null,
+                ExpiresIn = root.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600,
+                TokenType = root.TryGetProperty("token_type", out var tt) ? tt.GetString() ?? "Bearer" : "Bearer"
+            };
+
+            if (string.IsNullOrWhiteSpace(token.AccessToken))
+                throw new InvalidOperationException("刷新 Access Token 失败：" + json);
+
+            return token;
+        }
+        private static (string Verifier, string Challenge) GeneratePkce()
+        {
+            // 生成高强度随机 verifier（43-128 字节 Base64Url）
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            var bytes = new byte[64];
+            rng.GetBytes(bytes);
+            var verifier = Base64UrlEncode(bytes);
+
+            // challenge = BASE64URL(SHA256(verifier))
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(verifier));
+            var challenge = Base64UrlEncode(hash);
+
+            return (verifier, challenge);
+        }
+
+        private static string Base64UrlEncode(byte[] input)
+        {
+            var s = Convert.ToBase64String(input)
+                .Replace('+', '-')
+                .Replace('/', '_')
+                .TrimEnd('=');
+            return s;
+        }
+        private static void SaveRefreshToken(string? refreshToken)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(refreshToken)) return;
+                var vault = new Windows.Security.Credentials.PasswordVault();
+
+                // 先删除旧的
+                try
+                {
+                    var existing = vault.FindAllByResource(VaultResource);
+                    foreach (var item in existing)
+                    {
+                        if (item.UserName == VaultUser)
+                        {
+                            vault.Remove(item);
+                        }
+                    }
+                }
+                catch { /* 没有旧项也正常 */ }
+
+                vault.Add(new Windows.Security.Credentials.PasswordCredential(VaultResource, VaultUser, refreshToken));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[App] 保存 refresh_token 失败: " + ex);
+            }
+        }
+
+        private static string? LoadRefreshToken()
+        {
+            try
+            {
+                var vault = new Windows.Security.Credentials.PasswordVault();
+                var list = vault.FindAllByResource(VaultResource);
+                var item = list.FirstOrDefault(i => i.UserName == VaultUser);
+                if (item != null)
+                {
+                    var cred = vault.Retrieve(VaultResource, VaultUser);
+                    return cred.Password;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static void ClearRefreshToken()
+        {
+            try
+            {
+                var vault = new Windows.Security.Credentials.PasswordVault();
+                var list = vault.FindAllByResource(VaultResource);
+                foreach (var item in list)
+                {
+                    if (item.UserName == VaultUser)
+                        vault.Remove(item);
+                }
+            }
+            catch { }
+        }
         private static void EnableTokenCacheSerialization(ITokenCache tokenCache)
         {
             tokenCache.SetBeforeAccess(args =>
@@ -119,76 +331,170 @@ namespace TranslatorApp
         {
             try
             {
-                // 应用注册信息
-                var clientId = "63de19bb-351b-40e8-8a37-cb657eb6e685";
-                var redirectUri = "myapp://auth";
-                var scopes = "User.Read Files.ReadWrite.AppFolder";
+                // 生成 PKCE 参数
+                var (codeVerifier, codeChallenge) = GeneratePkce();
 
-                // 构造授权请求 URL
+                // 构造授权 URL（带 PKCE）
                 var authorizeUrl =
                     $"https://login.microsoftonline.com/common/oauth2/v2.0/authorize" +
-                    $"?client_id={clientId}" +
+                    $"?client_id={OAuthClientId}" +
                     $"&response_type=code" +
-                    $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
+                    $"&redirect_uri={Uri.EscapeDataString(OAuthRedirectUri)}" +
                     $"&response_mode=query" +
-                    $"&scope={Uri.EscapeDataString(scopes)}";
+                    $"&scope={Uri.EscapeDataString(OAuthScopes)}" +
+                    $"&code_challenge={codeChallenge}" +
+                    $"&code_challenge_method=S256";
 
-                // 调用系统账户选择器 (WebAuthenticationBroker)
+                // 打开系统账户选择器
                 var result = await WebAuthenticationBroker.AuthenticateAsync(
                     WebAuthenticationOptions.None,
                     new Uri(authorizeUrl),
-                    new Uri(redirectUri));
+                    new Uri(OAuthRedirectUri));
 
                 if (result.ResponseStatus == WebAuthenticationStatus.Success)
                 {
-                    // 从返回的 URI 中解析授权码
+                    // 解析授权码
                     var responseUri = new Uri(result.ResponseData);
                     var queryParams = System.Web.HttpUtility.ParseQueryString(responseUri.Query);
                     var code = queryParams["code"];
 
                     if (!string.IsNullOrEmpty(code))
                     {
-                        // 用授权码换取 Access Token
-                        using (var http = new HttpClient())
+                        // 用授权码 + code_verifier 换取令牌
+                        var token = await ExchangeCodeForTokenAsync(code, codeVerifier);
+
+                        if (!string.IsNullOrWhiteSpace(token.AccessToken))
                         {
-                            var tokenResponse = await http.PostAsync(
-                                "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-                                new FormUrlEncodedContent(new Dictionary<string, string>
+                            // 保存 refresh_token（持久化）
+                            SaveRefreshToken(token.RefreshToken);
+
+                            // 更新内存状态
+                            _accessToken = token.AccessToken;
+                            _accessTokenExpires = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn);
+                            _refreshToken = token.RefreshToken;
+
+                            // 初始化 GraphClient（动态令牌提供器）
+                            GraphClient = new GraphServiceClient(new BaseBearerTokenAuthenticationProvider(
+                                new DelegateTokenProvider(async (_, __) => await EnsureAccessTokenAsync())));
+
+                            // 获取用户信息与头像
+                            if (GraphClient != null)
+                            {
+                                try
                                 {
-                            { "client_id", clientId },
-                            { "scope", scopes },
-                            { "code", code },
-                            { "redirect_uri", redirectUri },
-                            { "grant_type", "authorization_code" }
-                                }));
+                                    // 获取用户基本信息（包含 displayName, mail, userPrincipalName）
+                                    var me = await GraphClient.Me.GetAsync();
 
-                            var json = await tokenResponse.Content.ReadAsStringAsync();
+                                    string displayName = me?.DisplayName ?? me?.UserPrincipalName ?? string.Empty;
+                                    string email = me?.Mail ?? me?.UserPrincipalName ?? string.Empty;
 
-                            // 使用 System.Text.Json 解析
-                            using var doc = JsonDocument.Parse(json);
-                            string accessToken = doc.RootElement.GetProperty("access_token").GetString();
+                                    // 尝试获取头像流
+                                    System.IO.Stream? photoStream = null;
+                                    try
+                                    {
+                                        photoStream = await GraphClient.Me.Photo.Content.GetAsync();
+                                    }
+                                    catch
+                                    {
+                                        photoStream = null;
+                                    }
 
-                            // 用 Access Token 初始化 GraphClient
-                            var tokenProvider = new BaseBearerTokenAuthenticationProvider(
-                                new DelegateTokenProvider((_, __) => Task.FromResult(accessToken)));
-                            GraphClient = new GraphServiceClient(tokenProvider);
+                                    BitmapImage? avatarImage = null;
+                                    if (photoStream is not null)
+                                    {
+                                        using var ms = new MemoryStream();
+                                        await photoStream.CopyToAsync(ms);
+                                        ms.Position = 0;
+                                        avatarImage = new BitmapImage();
+                                        await avatarImage.SetSourceAsync(ms.AsRandomAccessStream());
+                                    }
 
-                            await FetchAndUpdateAccountUiAsync();
+                                    // 在 UI 线程更新 MainPage 并刷新标题栏
+                                    await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(
+                                        Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                                        {
+                                            try
+                                            {
+                                                MainPage.Current?.UpdateAccountUI(displayName, avatarImage, email);
+                                            }
+                                            catch (Exception uiEx)
+                                            {
+                                                Debug.WriteLine("[InitMicrosoftAccountAsync] 更新 UI 异常: " + uiEx);
+                                            }
+                                        });
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine("[InitMicrosoftAccountAsync] 获取用户信息/头像失败: " + ex);
+                                }
+                            }
                         }
+                        else
+
+                        {
+                            Debug.WriteLine("[InitMicrosoftAccountAsync] 未获取到 access token");
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[InitMicrosoftAccountAsync] 授权码为空");
                     }
                 }
                 else if (result.ResponseStatus == WebAuthenticationStatus.ErrorHttp)
                 {
-                    Debug.WriteLine("[App] 登录失败，HTTP 错误: " + result.ResponseErrorDetail);
+                    Debug.WriteLine("[InitMicrosoftAccountAsync] 登录失败，HTTP 错误: " + result.ResponseErrorDetail);
                 }
                 else
                 {
-                    Debug.WriteLine("[App] 登录取消或失败: " + result.ResponseStatus);
+                    Debug.WriteLine("[InitMicrosoftAccountAsync] 登录取消或失败: " + result.ResponseStatus);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[App] 登录流程异常: " + ex);
+                Debug.WriteLine("[InitMicrosoftAccountAsync] 登录流程异常: " + ex);
+            }
+        }
+
+        public async Task TryRestoreLoginAsync()
+        {
+            try
+            {
+                // 从 PasswordVault 恢复 refresh_token
+                _refreshToken = LoadRefreshToken();
+                if (string.IsNullOrWhiteSpace(_refreshToken))
+                {
+                    Debug.WriteLine("[App] 没有可用的 refresh_token，需要交互登录。");
+                    return;
+                }
+
+                // 用 refresh_token 静默续期
+                var token = await RefreshAccessTokenAsync(_refreshToken);
+                if (!string.IsNullOrWhiteSpace(token.AccessToken))
+                {
+                    _accessToken = token.AccessToken;
+                    _accessTokenExpires = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn);
+                    _refreshToken = token.RefreshToken ?? _refreshToken; // 有些返回不会更新 refresh_token
+
+                    // 刷新持久化（若返回了新的 refresh_token）
+                    if (!string.IsNullOrWhiteSpace(token.RefreshToken) && token.RefreshToken != LoadRefreshToken())
+                    {
+                        SaveRefreshToken(token.RefreshToken);
+                    }
+
+                    // 初始化 GraphClient（动态令牌提供器）
+                    GraphClient = new GraphServiceClient(new BaseBearerTokenAuthenticationProvider(
+                        new DelegateTokenProvider(async (_, __) => await EnsureAccessTokenAsync())));
+
+                    await FetchAndUpdateAccountUiAsync();
+                }
+                else
+                {
+                    Debug.WriteLine("[App] 静默续期失败，需要交互登录。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[App] 恢复登录失败: " + ex);
             }
         }
 
@@ -226,7 +532,6 @@ namespace TranslatorApp
                     if (MainPage.Current != null)
                     {
                         MainPage.Current.UpdateAccountUI(me?.DisplayName ?? "", avatarImage);
-                        RefreshTitleBarNow();
                     }
                 }
                 catch { }
@@ -296,10 +601,9 @@ namespace TranslatorApp
 
             try
             {
-                // 首选启动尺寸（可选）——DIP 单位
+                // 首选最小尺寸（DIP 单位）
                 try
                 {
-                    // 首选最小尺寸（DIP 单位）
                     Windows.UI.ViewManagement.ApplicationView.GetForCurrentView()
                         .SetPreferredMinSize(new Windows.Foundation.Size(900, 680));
                 }
@@ -318,16 +622,25 @@ namespace TranslatorApp
                     bool navigated = rootFrame.Navigate(typeof(MainPage), args?.Arguments);
                     Debug.WriteLine($"Navigate to MainPage result: {navigated}");
                 }
-                // 激活窗口（在设置首选最小尺寸之后）
+
+                // 激活窗口（保证 UI 已就绪）
                 Window.Current.Activate();
 
-                // 延迟再次应用，以覆盖可能的系统延迟或主题刷新问题
-                var _ = Window.Current.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                // 立即应用主题与背景（不要延迟），并启动静默登录与其他后台初始化
+                try
                 {
-                    await Task.Delay(50);
                     ApplySavedTheme();
                     ApplySavedBackdrop();
-                });
+                }
+                catch (Exception exTheme)
+                {
+                    Debug.WriteLine("[OnLaunched] Apply theme/backdrop failed: " + exTheme);
+                }
+
+                // 启动静默恢复登录和可选预加载，但不阻塞启动流程
+                _ = TryRestoreLoginAsync();
+                // 可选预加载每日一句（异步、不阻塞）
+                _ = PreloadDailySentence();
             }
             catch (Exception ex)
             {
@@ -590,152 +903,7 @@ namespace TranslatorApp
             if (!string.IsNullOrEmpty(initialQuery)) core.Navigate($"https://cn.bing.com/dict/search?q={Uri.EscapeDataString(initialQuery)}");
         }
 
-        public void RegisterWindowTitleBar(UIElement dragElement, FrameworkElement? customRegion = null, FrameworkElement? accountElement = null, FrameworkElement? centerHost = null)
-        {
-            if (dragElement == null) throw new ArgumentNullException(nameof(dragElement));
-            _dragElement = dragElement;
-            _customRegion = customRegion;
-            _accountElement = accountElement;
-            _centerHost = centerHost;
-            EnsureTitleBarSubscriptions();
-            _ = UpdateLayoutAndRegisterAsync();
-        }
-
-        private void EnsureTitleBarSubscriptions()
-        {
-            if (_titlebarRegistered) return;
-            try
-            {
-                _coreTitleBar = CoreApplication.GetCurrentView().TitleBar;
-                _coreTitleBar.ExtendViewIntoTitleBar = true;
-                _coreTitleBar.LayoutMetricsChanged += (s, e) => _ = UpdateLayoutAndRegisterAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("[App] CoreTitleBar subscribe failed: " + ex);
-            }
-            try
-            {
-                var di = Windows.Graphics.Display.DisplayInformation.GetForCurrentView();
-                di.DpiChanged += (s, e) => _ = UpdateLayoutAndRegisterAsync();
-            }
-            catch { }
-            try
-            {
-                Window.Current.CoreWindow.SizeChanged += (s, e) => _ = UpdateLayoutAndRegisterAsync();
-            }
-            catch { }
-            _titlebarRegistered = true;
-        }
-
-        private void UpdateInsetsAndScale()
-        {
-            try
-            {
-                if (_coreTitleBar == null) _coreTitleBar = CoreApplication.GetCurrentView().TitleBar;
-                var di = Windows.Graphics.Display.DisplayInformation.GetForCurrentView();
-                _rawPixelsPerViewPixel = di.RawPixelsPerViewPixel;
-                var rawR = _coreTitleBar?.SystemOverlayRightInset ?? 0;
-                var rawL = _coreTitleBar?.SystemOverlayLeftInset ?? 0;
-                if (_rawPixelsPerViewPixel > 0)
-                {
-                    _rightInset = rawR / _rawPixelsPerViewPixel;
-                    _leftInset = rawL / _rawPixelsPerViewPixel;
-                }
-                else
-                {
-                    _rightInset = rawR;
-                    _leftInset = rawL;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("[App UpdateInsetsAndScale] " + ex);
-                _rightInset = 0;
-                _leftInset = 0;
-            }
-        }
-
-        private async Task UpdateLayoutAndRegisterAsync()
-        {
-            try
-            {
-                if (_dragElement == null) return;
-
-                UpdateInsetsAndScale();
-                await Task.Yield();
-
-                double leftExclude = _leftInset;
-                double rightExclude = _rightInset;
-
-                // 不再把账号宽度叠加到 rightExclude（这样会缩小拖拽区）
-                // 但我们需要把账号元素本身往左偏移，保证它不会落在系统按钮下
-                // 计算最小拖拽区保护
-                double totalWidth = Window.Current.Bounds.Width;
-                const double MinDragWidth = 48.0;
-                if (totalWidth - (leftExclude + rightExclude) < MinDragWidth)
-                    rightExclude = Math.Max(0, totalWidth - MinDragWidth - leftExclude);
-
-                // ---- 核心修复：让 DragRegion 从 leftExclude 开始，宽度延伸到窗口最右边 ----
-                if (_dragElement is FrameworkElement feDrag)
-                {
-                    // 左侧留出系统 inset，右侧通过设置宽度延伸到窗口最右
-                    feDrag.Margin = new Windows.UI.Xaml.Thickness(leftExclude, 0, 0, 0);
-                    feDrag.HorizontalAlignment = HorizontalAlignment.Left;
-                    feDrag.VerticalAlignment = VerticalAlignment.Top;
-
-                    // 宽度 = 窗口宽 - leftExclude（视觉上覆盖到窗口最右边）
-                    feDrag.Width = Math.Max(0, totalWidth - leftExclude);
-
-                    // 保持高度为系统标题栏高度或至少 48
-                    double titleHeight = Math.Max(48.0, _coreTitleBar?.Height ?? 48.0);
-                    feDrag.Height = titleHeight;
-                    feDrag.MinHeight = titleHeight;
-                }
-
-                // 将 customRegion（整段标题栏容器）padding 调整为系统 inset（视觉内缩，避免内容被系统按钮压住）
-                if (_customRegion is Control ctrl)
-                {
-                    ctrl.Padding = new Windows.UI.Xaml.Thickness(_leftInset, 0, _rightInset, 0);
-                }
-
-                // 关键：把账号元素右侧 margin 设置为 _rightInset + 用户留白（例如 12）
-                try
-                {
-                    if (_accountElement != null)
-                    {
-                        var m = _accountElement.Margin;
-                        double desiredRightGap = 12.0; // 你希望头像离系统按钮留出的间距
-                        _accountElement.HorizontalAlignment = HorizontalAlignment.Right;
-                        _accountElement.Margin = new Windows.UI.Xaml.Thickness(m.Left, m.Top, _rightInset + desiredRightGap, m.Bottom);
-
-                        // 确保头像在视觉上高于拖拽区
-                        Canvas.SetZIndex(_accountElement, 2);
-
-                        // 让头像垂直对齐并与标题高度协调
-                        if (_accountElement is FrameworkElement fae)
-                        {
-                            double titleHeight = Math.Max(48.0, _coreTitleBar?.Height ?? 48.0);
-                            fae.Height = Math.Max(28.0, titleHeight - 12.0);
-                            fae.VerticalAlignment = VerticalAlignment.Center;
-                        }
-                    }
-                }
-                catch { }
-
-                if (_centerHost != null)
-                    _centerHost.HorizontalAlignment = HorizontalAlignment.Center;
-
-                Window.Current.SetTitleBar(_dragElement);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("[App UpdateLayoutAndRegisterAsync] " + ex);
-            }
-        }
-        public void RefreshTitleBarNow() => _ = UpdateLayoutAndRegisterAsync();
-
-        private static bool IsSystemInDarkMode()
+        public static bool IsSystemInDarkMode()
         {
             try
             {
@@ -801,8 +969,6 @@ namespace TranslatorApp
                 muxc.BackdropMaterial.SetApplyToRootOrPageBackground(root, false);
                 root.Background = new SolidColorBrush(useDark ? Colors.Black : Colors.White);
             }
-
-            RefreshTitleBarNow();
         }
     }
 }
