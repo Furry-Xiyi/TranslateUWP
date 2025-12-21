@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using Windows.Foundation;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
+using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
@@ -21,7 +23,25 @@ using TranslatorApp.Services;
 
 namespace TranslatorApp
 {
-    public sealed partial class MainPage : Page
+    // Converter for inverting bool to visibility
+    public class InverseBoolToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            if (value is bool boolValue)
+                return boolValue ? Visibility.Collapsed : Visibility.Visible;
+            if (value is Visibility visibility)
+                return visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            return Visibility.Visible;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    public sealed partial class MainPage : Page, INotifyPropertyChanged
     {
         public static MainPage Current { get; private set; }
         private CoreApplicationViewTitleBar _coreTitleBar;
@@ -35,6 +55,38 @@ namespace TranslatorApp
         private const double CompactModeThreshold = 1000;
         private const double MinWindowWidth = 900;
         private const double MinWindowHeight = 680;
+
+        // 账户信息缓存
+        private string _cachedDisplayName = "";
+        private string _cachedEmail = "";
+        private ImageSource _cachedAvatar = null;
+
+        // 登录状态属性（用于绑定）
+        private bool _isRestoringLogin = false;
+        public bool IsRestoringLogin
+        {
+            get => _isRestoringLogin;
+            set
+            {
+                if (_isRestoringLogin != value)
+                {
+                    _isRestoringLogin = value;
+                    OnPropertyChanged(nameof(IsRestoringLogin));
+                    OnPropertyChanged(nameof(IsAccountButtonEnabled));
+                    OnPropertyChanged(nameof(AccountLoadingRingVisibility));
+                }
+            }
+        }
+
+        public bool IsAccountButtonEnabled => !IsRestoringLogin;
+
+        public Visibility AccountLoadingRingVisibility => IsRestoringLogin ? Visibility.Visible : Visibility.Collapsed;
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
 
         public MainPage()
         {
@@ -59,6 +111,10 @@ namespace TranslatorApp
             // 设置最小窗口大小
             SetMinimumWindowSize();
 
+            // 🔴 冷启动必须显式导航首页
+            NavigateTo(typeof(Pages.WordLookupPage));
+
+            // 同步侧栏选中状态（仅 UI 表现）
             try
             {
                 var startItem = NavView.MenuItems
@@ -72,14 +128,13 @@ namespace TranslatorApp
             }
             catch { }
 
-            NavigateTo(typeof(Pages.WordLookupPage));
-
-            // 修复：恢复启动时的 API Key 检测逻辑
+            // 启动时检查 API Key
             CheckApiSetupOnStartup();
 
             // 初始化侧栏显示模式
             UpdateNavigationViewDisplayMode();
         }
+
 
         // 设置最小窗口大小
         private void SetMinimumWindowSize()
@@ -121,43 +176,55 @@ namespace TranslatorApp
         // ========== 新增/修复 API 检测逻辑 ==========
         private async void CheckApiSetupOnStartup()
         {
-            // 1. 等待 UI 线程完全就绪，确保 XamlRoot 可用
-            await Task.Delay(1000);
+            await Dispatcher.RunAsync(
+                Windows.UI.Core.CoreDispatcherPriority.Low,
+                async () =>
+                {
+                    await Task.Delay(200); // 给首帧一点时间
 
-            // 2. 检查用户是否勾选了"不再提示"
-            var ignore = Windows.Storage.ApplicationData.Current.LocalSettings.Values["IgnoreApiDialog"] as bool? ?? false;
-            if (ignore) return;
+                    if (ShouldShowApiDialog())
+                    {
+                        await ShowApiHelpDialogAsync(showDoNotRemind: true);
+                    }
+                });
+        }
+        private bool ShouldShowApiDialog()
+        {
+            // 是否用户选择过"不再提示"
+            var ignore = Windows.Storage.ApplicationData.Current.LocalSettings.Values["IgnoreApiDialog"] as bool?;
+            if (ignore == true)
+                return false;
 
-            // 3. 检查所有 Key 是否为空
+            // 是否至少配置了一个 API
             bool hasBing = !string.IsNullOrEmpty(SettingsService.BingAppId);
             bool hasBaidu = !string.IsNullOrEmpty(SettingsService.BaiduAppId);
             bool hasYoudao = !string.IsNullOrEmpty(SettingsService.YoudaoAppKey);
 
-            // 4. 如果所有 Key 都没有配置，才弹窗
-            if (!hasBing && !hasBaidu && !hasYoudao)
-            {
-                ShowApiHelpDialog(showDoNotRemind: true);
-            }
+            // 只有「一个都没配」才弹
+            return !hasBing && !hasBaidu && !hasYoudao;
         }
 
-        public async void ShowApiHelpDialog(bool showDoNotRemind)
+
+        public async Task ShowApiHelpDialogAsync(bool showDoNotRemind)
         {
             try
             {
                 var template = RootGrid.Resources["WelcomeApiExpanderTemplate"] as DataTemplate;
+
                 var dialog = new ContentDialog
                 {
                     XamlRoot = this.Content.XamlRoot,
                     Title = "配置翻译服务",
-                    Content = template.LoadContent(),
+                    Content = template?.LoadContent(),
                     PrimaryButtonText = "前往设置",
                     DefaultButton = ContentDialogButton.Primary,
                     CloseButtonText = "稍后配置"
                 };
 
-                dialog.HorizontalAlignment = HorizontalAlignment.Stretch;
-                dialog.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-                dialog.PrimaryButtonClick += (s, e) => { NavigateTo(typeof(Pages.SettingsPage)); };
+                dialog.PrimaryButtonClick += (s, e) =>
+                {
+                    NavigateTo(typeof(Pages.SettingsPage));
+                };
 
                 if (showDoNotRemind)
                 {
@@ -170,8 +237,12 @@ namespace TranslatorApp
 
                 await dialog.ShowAsync();
             }
-            catch { }
+            catch
+            {
+                // 冷启动下被系统 cancel 是正常情况，必须吃掉
+            }
         }
+
         // ==========================================
 
         private void InitializeTitleBar()
@@ -326,44 +397,178 @@ namespace TranslatorApp
             FlyoutBase.ShowAttachedFlyout(AccountButton);
         }
 
+        private void AccountFlyout_Opening(object sender, object e)
+        {
+            UpdateFlyoutAccountInfo();
+        }
+        private void FlyoutHeaderGrid_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement grid)
+            {
+                // 直接从 Grid 开始往下找，肯定能找到
+                UpdateFlyoutContentFromRoot(grid);
+            }
+        }
+
+        private void UpdateFlyoutAccountInfo()
+        {
+            if (AccountFlyout?.Items?.Count > 0 && AccountFlyout.Items[0] is MenuFlyoutItem headerItem)
+            {
+                try { headerItem.ApplyTemplate(); } catch { }
+
+                // 尝试从 Item 更新。
+                // 注意：如果 UI 还没渲染，这里会因为找不到子元素而“什么都不做”，
+                // 但是没关系，上面的 FlyoutHeaderGrid_Loaded 随后会补刀。
+                UpdateFlyoutContentFromRoot(headerItem);
+            }
+        }
+        private void UpdateFlyoutContentFromRoot(DependencyObject root)
+        {
+            var flyoutNameElem = FindElementByName(root, "FlyoutName") as TextBlock;
+            var flyoutEmailElem = FindElementByName(root, "FlyoutEmail") as TextBlock;
+            var flyoutAvatarElem = FindElementByName(root, "FlyoutAvatar") as FrameworkElement;
+
+            // 更新文本
+            if (flyoutNameElem != null)
+                flyoutNameElem.Text = string.IsNullOrEmpty(_cachedDisplayName) ? "未登录" : _cachedDisplayName;
+
+            if (flyoutEmailElem != null)
+                flyoutEmailElem.Text = _cachedEmail ?? "";
+
+            // 更新头像
+            if (flyoutAvatarElem != null)
+            {
+                var avatarType = flyoutAvatarElem.GetType();
+
+                // 设置图片 (ProfilePicture)
+                var propProfile = avatarType.GetProperty("ProfilePicture");
+                if (propProfile != null && propProfile.CanWrite)
+                {
+                    propProfile.SetValue(flyoutAvatarElem, _cachedAvatar);
+                }
+
+                // 设置首字母 (Initials)，防止图片为空时显示残留信息
+                if (_cachedAvatar == null)
+                {
+                    var propInitials = avatarType.GetProperty("Initials");
+                    if (propInitials != null && propInitials.CanWrite)
+                    {
+                        string initials = string.IsNullOrEmpty(_cachedDisplayName) ? "" : _cachedDisplayName.Substring(0, 1);
+                        propInitials.SetValue(flyoutAvatarElem, initials);
+                    }
+                }
+            }
+        }
+
+        //递归查找元素
+        private FrameworkElement FindElementByName(DependencyObject root, string name)
+        {
+            if (root == null) return null;
+
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is FrameworkElement fe)
+                {
+                    if (fe.Name == name) return fe;
+                    var found = FindElementByName(child, name);
+                    if (found != null) return found;
+                }
+                else
+                {
+                    var found = FindElementByName(child, name);
+                    if (found != null) return found;
+                }
+            }
+            return null;
+        }
+
         public void UpdateAccountUI(string displayName, ImageSource photo = null, string email = null)
         {
+            // 缓存账户信息
+            _cachedDisplayName = displayName ?? "";
+            _cachedEmail = email ?? "";
+            _cachedAvatar = photo;
+
             bool signedIn = !string.IsNullOrEmpty(displayName);
 
-            if (photo != null) AccountPicture.ProfilePicture = photo;
-            else AccountPicture.Initials = string.IsNullOrEmpty(displayName) ? "?" : displayName.Substring(0, 1);
+            // ===== 主界面头像 =====
+            // 关键修复：显式清空或设置图片
+            AccountPicture.ProfilePicture = photo;
 
+            if (photo == null)
+            {
+                // 如果没有图片，且未登录，设置为空字符串以显示默认人像图标
+                // 之前是 set "?" 导致显示问号
+                AccountPicture.Initials = signedIn ? (displayName.Substring(0, 1)) : "";
+            }
+
+            // ===== 菜单项可见性 =====
             LoginMenuItem.Visibility = signedIn ? Visibility.Collapsed : Visibility.Visible;
             SwitchAccountMenuItem.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
             LogoutMenuItem.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
+            SettingsMenuItem.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
 
-            FlyoutName.Text = string.IsNullOrEmpty(displayName) ? "未登录" : displayName;
-            FlyoutEmail.Text = email ?? "";
+            // 如果 Flyout 此时是打开的，强制刷新一下 Flyout 内容
+            if (AccountButton.Flyout != null && AccountButton.Flyout.IsOpen)
+            {
+                UpdateFlyoutAccountInfo();
+            }
+        }
 
-            if (photo != null) FlyoutAvatar.ProfilePicture = photo;
-            else FlyoutAvatar.Initials = string.IsNullOrEmpty(displayName) ? "?" : displayName.Substring(0, 1);
+        public void StartRestoringLogin()
+        {
+            IsRestoringLogin = true;
+        }
+
+        // 完成恢复登录（清除 loading 状态）
+        public void FinishRestoringLogin()
+        {
+            IsRestoringLogin = false;
         }
 
         private async void LoginMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            await ((App)Application.Current).InitMicrosoftAccountAsync();
+            try
+            {
+                StartRestoringLogin(); // 手动开启 Loading
+                await ((App)Application.Current).InitMicrosoftAccountAsync();
+            }
+            finally
+            {
+                FinishRestoringLogin(); // 无论成功失败都关闭 Loading
+            }
         }
 
         private async void SwitchAccountMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            await ((App)Application.Current).SignOutAsync();
-            await ((App)Application.Current).InitMicrosoftAccountAsync();
+            try
+            {
+                StartRestoringLogin(); // 手动开启 Loading
+                await ((App)Application.Current).SignOutAsync();
+                await ((App)Application.Current).InitMicrosoftAccountAsync();
+            }
+            finally
+            {
+                FinishRestoringLogin(); // 关闭 Loading
+            }
         }
 
         private async void LogoutMenuItem_Click(object sender, RoutedEventArgs e)
         {
             await ((App)Application.Current).SignOutAsync();
+
+            // 这会触发 UpdateAccountUI，进入上面写好的逻辑，清空图片和文字
             UpdateAccountUI(null, null);
+
+            Windows.Storage.ApplicationData.Current.LocalSettings.Values["HasEverLoggedIn"] = false;
         }
 
-        private void SettingsItem_Click(object sender, RoutedEventArgs e)
+        private async void SettingsItem_Click(object sender, RoutedEventArgs e)
         {
-            NavigateTo(typeof(Pages.SettingsPage));
+            var uri = new Uri("https://account.microsoft.com/privacy/app-access");
+            await Windows.System.Launcher.LaunchUriAsync(uri);
         }
 
         #endregion
@@ -410,15 +615,37 @@ namespace TranslatorApp
 
         private void NavigateTo(Type pageType, object param = null)
         {
+            if (pageType == typeof(Pages.WordLookupPage))
+            {
+                ContentFrame.Navigate(pageType, param,
+                    new EntranceNavigationTransitionInfo());
+                return;
+            }
+
             if (ContentFrame.CurrentSourcePageType != pageType)
                 ContentFrame.Navigate(pageType, param);
         }
 
+
         private void NavView_SelectionChanged(muxc.NavigationView sender, muxc.NavigationViewSelectionChangedEventArgs args)
         {
-            if (args.IsSettingsSelected) NavigateTo(typeof(Pages.SettingsPage));
+            if (args.IsSettingsSelected)
+            {
+                NavigateTo(typeof(Pages.SettingsPage));
+                FavIcon.Symbol = Symbol.OutlineStar;
+            }
             else if (args.SelectedItem is muxc.NavigationViewItem item && item.Tag is string tag)
             {
+                if (tag == "FavoritesPage")
+                {
+                    FavIcon.Symbol = Symbol.Favorite;
+                }
+                else
+                {
+                    FavIcon.Symbol = Symbol.OutlineStar;
+                }
+                // ------------------
+
                 switch (tag)
                 {
                     case "WordLookupPage": NavigateTo(typeof(Pages.WordLookupPage)); break;

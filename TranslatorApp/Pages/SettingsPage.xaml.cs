@@ -54,7 +54,7 @@ namespace TranslatorApp.Pages
                 "None" => 0,
                 "Mica" => 1,
                 "Acrylic" => 2,
-                _ => 1
+                _ => 2
             };
 
             // API Keys
@@ -281,10 +281,12 @@ namespace TranslatorApp.Pages
         }
 
         // 新增：点击“如何获取 API 密钥”的处理
-        private void HowToGetApi_Click(object sender, RoutedEventArgs e)
+        private async void HowToGetApi_Click(object sender, RoutedEventArgs e)
         {
-            // 调用 MainPage 的公共方法显示对话框
-            MainPage.Current?.ShowApiHelpDialog(showDoNotRemind: false);
+            if (MainPage.Current != null)
+            {
+                await MainPage.Current.ShowApiHelpDialogAsync(false);
+            }
         }
 
         public class DictionaryItem

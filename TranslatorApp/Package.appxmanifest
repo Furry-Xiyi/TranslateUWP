@@ -7,14 +7,14 @@
   IgnorableNamespaces="uap mp">
 
   <Identity
-    Name="6BABD18E.FurryXiyi.TranslatorApp"
+    Name="6BABD18E.TranslaterUWP"
     Publisher="CN=1D20BDA0-45B9-4AE2-B595-48FAEE1F3DC1"
-    Version="1.0.0.0" />
+    Version="1.0.1.0" />
 
-  <mp:PhoneIdentity PhoneProductId="a8a246b8-1ba1-402b-b585-c6d515807d92" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="452b4ce1-ba0f-4382-98d8-7104cb9b2798" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>翻译</DisplayName>
+    <DisplayName>Translater UWP</DisplayName>
     <PublisherDisplayName>惜忆想睡觉😪💤🐾</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -32,7 +32,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="TranslatorApp.App">
       <uap:VisualElements
-        DisplayName="翻译"
+        DisplayName="Translater UWP"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png"
         Description="TranslatorApp"

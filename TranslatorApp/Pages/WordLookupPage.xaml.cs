@@ -2,6 +2,7 @@
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -43,35 +44,66 @@ namespace TranslatorApp.Pages
             base.OnNavigatedTo(e);
 
             // 首次加载每日一句
-            await InitializeDailySentenceAsync();
+            _=InitializeDailySentenceAsync();
 
-            // 如果有查词参数，则导航到查词
-            if (e.Parameter is string term && !string.IsNullOrWhiteSpace(term))
-            {
-                _currentQuery = term;
-                AddToHistory(term);
-                NavigateToSite(term);
-            }
+            
         }
 
+        private async Task InitializePageAsync(NavigationEventArgs e)
+        {
+            try
+            {
+                await InitializeDailySentenceAsync();
+
+                if (e.Parameter is string term && !string.IsNullOrWhiteSpace(term))
+                {
+                    _currentQuery = term;
+                    AddToHistory(term);
+                    NavigateToSite(term);
+                }
+            }
+            catch (Exception ex)
+            {
+                MainPage.Current?.ShowError("页面初始化失败");
+                Debug.WriteLine(ex);
+            }
+        }
         private async Task InitializeDailySentenceAsync()
         {
             SkeletonLayer.Visibility = Visibility.Visible;
             ContentLayer.Visibility = Visibility.Collapsed;
 
-            var app = (App)Application.Current;
-            var data = app.CachedDailySentence ?? await GetDailySentenceData();
+            try
+            {
+                var app = (App)Application.Current;
+                var data = app.CachedDailySentence ?? await GetDailySentenceData();
 
-            if (data != null)
-            {
-                app.CachedDailySentence = data;
-                _currentData = data;
-                await ApplyDailySentenceDataAsync(data);
+                if (data != null)
+                {
+                    app.CachedDailySentence = data;
+                    _currentData = data;
+                    await ApplyDailySentenceDataAsync(data);
+                }
+                else
+                {
+                    MainPage.Current?.ShowError("加载每日一句失败");
+                }
             }
-            else
+            catch (TaskCanceledException)
             {
+                Debug.WriteLine("Daily sentence canceled");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+                MainPage.Current?.ShowError("初始化异常");
+            }
+            finally
+            {
+                // 🔴 无论如何，都要退出骨架屏
+                ShimmerStoryboard.Stop();
                 SkeletonLayer.Visibility = Visibility.Collapsed;
-                MainPage.Current?.ShowError("加载每日一句失败");
+                ContentLayer.Visibility = Visibility.Visible;
             }
         }
 
@@ -85,14 +117,23 @@ namespace TranslatorApp.Pages
             _currentImageUrl = data.PicUrl;
 
             // 加载背景图和配图
-            if (!string.IsNullOrEmpty(data.PicUrl))
+            if (!string.IsNullOrWhiteSpace(data.PicUrl) &&
+    Uri.TryCreate(data.PicUrl, UriKind.Absolute, out var uri) &&
+    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
             {
                 try
                 {
-                    var bitmap = new BitmapImage(new Uri(data.PicUrl));
+                    var bitmap = new BitmapImage(uri);
                     BackgroundImage.Source = bitmap;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Load image failed: " + ex);
+                }
+            }
+            else
+            {
+                Debug.WriteLine("Invalid PicUrl: " + data.PicUrl);
             }
 
             // 停止骨架屏动画

@@ -5,7 +5,12 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:TranslatorApp"
     mc:Ignorable="d">
+
+    <Page.Resources>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
+    </Page.Resources>
 
     <Grid x:Name="RootGrid" UseLayoutRounding="True">
         <Grid.Resources>
@@ -31,15 +36,9 @@
                             </Grid>
                         </controls:Expander.Header>
                         <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
-                            <HyperlinkButton Content="Bing 翻译 API" NavigateUri="
-                  https://www.microsoft.com/en-us/translator/business/translator-api/
-                  "/>
-                            <HyperlinkButton Content="百度翻译 API" NavigateUri="
-                  https://api.fanyi.baidu.com/
-                  "/>
-                            <HyperlinkButton Content="有道翻译 API" NavigateUri="
-                  https://ai.youdao.com/
-                  "/>
+                            <HyperlinkButton Content="必应翻译 API" NavigateUri="https://www.microsoft.com/en-us/translator/business/translator-api/"/>
+                            <HyperlinkButton Content="百度翻译 API" NavigateUri="https://api.fanyi.baidu.com/"/>
+                            <HyperlinkButton Content="有道翻译 API" NavigateUri="https://ai.youdao.com/"/>
                         </StackPanel>
                     </controls:Expander>
                 </StackPanel>
@@ -125,9 +124,9 @@
                               SelectionChanged="LookupSite_SelectionChanged"
                               Visibility="Visible">
                         <ComboBoxItem Content="Google" Tag="Google"/>
-                        <ComboBoxItem Content="Bing" Tag="Bing"/>
+                        <ComboBoxItem Content="必应" Tag="Bing"/>
                         <ComboBoxItem Content="Youdao" Tag="Youdao"/>
-                        <ComboBoxItem Content="本地词典" Tag="Local"/>
+                        <ComboBoxItem Content="本地词典（开发中）" Tag="Local"/>
                     </ComboBox>
 
                     <AutoSuggestBox x:Name="LookupSearchBox"
@@ -153,53 +152,123 @@
                             Visibility="Collapsed"/>
                 </Grid>
 
-                <Button x:Name="AccountButton"
-                        Grid.Column="3"
-                        Style="{StaticResource AvatarButtonStyle}"
-                        Width="40" 
-                        Height="40"
-                        Margin="12,0,12,0"
-                        Click="AccountButton_Click">
-                    <controls:PersonPicture x:Name="AccountPicture" 
-                                          Width="30" 
-                                          Height="30" 
-                                          IsHitTestVisible="True"/>
+                <Grid Grid.Column="3">
+                    <Button x:Name="AccountButton"
+                            Style="{StaticResource AvatarButtonStyle}"
+                            Width="40" 
+                            Height="40"
+                            Margin="12,0,12,0"
+                            Click="AccountButton_Click"
+                            IsEnabled="{x:Bind IsAccountButtonEnabled, Mode=OneWay}">
+                        <Grid>
+                            <controls:PersonPicture x:Name="AccountPicture" 
+                            Width="30" 
+                            Height="30"
+                            PreferSmallImage="True"/>
 
-                    <FlyoutBase.AttachedFlyout>
-                        <Flyout x:Name="AccountFlyout" Placement="BottomEdgeAlignedRight">
-                            <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="MinWidth" Value="240"/>
-                                    <Setter Property="CornerRadius" Value="8"/>
-                                    <Setter Property="Background" Value="{ThemeResource FlyoutPresenterBackground}"/>
-                                </Style>
-                            </Flyout.FlyoutPresenterStyle>
+                            <controls:ProgressRing x:Name="AccountLoadingRing"
+                           Width="30"
+                           Height="30"
+                           IsHitTestVisible="False"
+                           IsActive="{x:Bind IsRestoringLogin, Mode=OneWay}"
+                           Visibility="{x:Bind AccountLoadingRingVisibility, Mode=OneWay}"/>
+                        </Grid>
 
-                            <StackPanel Width="280">
-                                <Grid Padding="16" Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <controls:PersonPicture x:Name="FlyoutAvatar" Width="48" Height="48" />
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
-                                        <TextBlock x:Name="FlyoutName" Text="未登录" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="FlyoutEmail" Text="" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
-                                </Grid>
+                        <FlyoutBase.AttachedFlyout>
+                            <MenuFlyout
+                                x:Name="AccountFlyout"
+                                Placement="BottomEdgeAlignedRight"
+                                Opening="AccountFlyout_Opening">
 
-                                <StackPanel Padding="4,8">
-                                    <MenuFlyoutItem x:Name="LoginMenuItem" Text="登录" Icon="Contact" Click="LoginMenuItem_Click"/>
-                                    <MenuFlyoutItem x:Name="SwitchAccountMenuItem" Text="切换账号" Icon="Switch" Click="SwitchAccountMenuItem_Click" Visibility="Collapsed"/>
-                                    <MenuFlyoutItem x:Name="LogoutMenuItem" Text="注销" Icon="Cancel" Click="LogoutMenuItem_Click" Visibility="Collapsed"/>
-                                    <MenuFlyoutSeparator/>
-                                    <MenuFlyoutItem Text="设置" Icon="Setting" Click="SettingsItem_Click"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Flyout>
-                    </FlyoutBase.AttachedFlyout>
-                </Button>
+                                <MenuFlyoutItem
+                                    IsEnabled="False"
+                                    Padding="0"
+                                    MinWidth="280">
+                                    <MenuFlyoutItem.Template>
+                                        <ControlTemplate TargetType="MenuFlyoutItem">
+                                            <Grid Padding="16" Loaded="FlyoutHeaderGrid_Loaded">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <controls:PersonPicture
+                                                    x:Name="FlyoutAvatar"
+                                                    Width="48"
+                                                    Height="48"
+                                                    VerticalAlignment="Center"/>
+
+                                                <StackPanel
+                                                    Grid.Column="1"
+                                                    Margin="12,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        x:Name="FlyoutName"
+                                                        Text="未登录"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
+                                                        TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock
+                                                        x:Name="FlyoutEmail"
+                                                        Text=""
+                                                        FontSize="12"
+                                                        Opacity="0.7"
+                                                        Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"
+                                                        TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </MenuFlyoutItem.Template>
+                                </MenuFlyoutItem>
+
+                                <MenuFlyoutSeparator/>
+
+                                <MenuFlyoutItem
+                                    x:Name="LoginMenuItem"
+                                    Text="登录"
+                                    Click="LoginMenuItem_Click">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE716;"/>
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+
+                                <MenuFlyoutItem
+                                    x:Name="SwitchAccountMenuItem"
+                                    Text="切换账号"
+                                    Click="SwitchAccountMenuItem_Click"
+                                    Visibility="Collapsed">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE748;"/>
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+
+                                <MenuFlyoutItem
+                                    x:Name="LogoutMenuItem"
+                                    Text="注销"
+                                    Click="LogoutMenuItem_Click"
+                                    Visibility="Collapsed">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xF3B1;"/>
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+
+                                <MenuFlyoutSeparator/>
+
+                                <MenuFlyoutItem
+                                    x:Name="SettingsMenuItem"
+                                    Text="账户设置"
+                                    Click="SettingsItem_Click"
+                                    Visibility="Collapsed">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEF58;"/>
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+
+                            </MenuFlyout>
+                        </FlyoutBase.AttachedFlyout>
+
+                    </Button>
+                </Grid>
             </Grid>
         </Grid>
 
@@ -214,7 +283,11 @@
                 <controls:NavigationView.MenuItems>
                     <controls:NavigationViewItem x:Name="Nav_Online" Content="查词" Icon="Find" Tag="WordLookupPage"/>
                     <controls:NavigationViewItem x:Name="Nav_Lookup" Content="互译" Icon="Globe" Tag="OnlineTranslatePage"/>
-                    <controls:NavigationViewItem x:Name="Nav_Fav" Content="收藏" Icon="Favorite" Tag="FavoritesPage"/>
+                    <controls:NavigationViewItem x:Name="Nav_Fav" Content="收藏" Tag="FavoritesPage">
+                        <controls:NavigationViewItem.Icon>
+                            <SymbolIcon x:Name="FavIcon" Symbol="Favorite"/>
+                        </controls:NavigationViewItem.Icon>
+                    </controls:NavigationViewItem>
                 </controls:NavigationView.MenuItems>
                 <Frame x:Name="ContentFrame"/>
             </controls:NavigationView>

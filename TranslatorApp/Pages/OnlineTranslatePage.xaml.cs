@@ -147,8 +147,8 @@ namespace TranslatorApp.Pages
         {
             CbApi.Items.Clear();
             // 添加本地翻译选项
-            CbApi.Items.Add(new ComboBoxItem { Content = "本地翻译 (离线)", Tag = "Local" });
-            CbApi.Items.Add(new ComboBoxItem { Content = "Bing", Tag = "Bing" });
+            CbApi.Items.Add(new ComboBoxItem { Content = "离线 (开发中)", Tag = "Local" });
+            CbApi.Items.Add(new ComboBoxItem { Content = "必应", Tag = "Bing" });
             CbApi.Items.Add(new ComboBoxItem { Content = "百度", Tag = "Baidu" });
             CbApi.Items.Add(new ComboBoxItem { Content = "有道", Tag = "Youdao" });
 
