@@ -9,7 +9,7 @@
   <Identity
     Name="6BABD18E.TranslaterUWP"
     Publisher="CN=1D20BDA0-45B9-4AE2-B595-48FAEE1F3DC1"
-    Version="1.0.1.0" />
+    Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="452b4ce1-ba0f-4382-98d8-7104cb9b2798" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
